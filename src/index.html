@@ -1,11 +1,3345 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Document</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>四川省专用通信局光缆管理系统</title>
+
+    <link rel="stylesheet" href="libs/leaflet/leaflet.css" />
+    <script src="libs/leaflet/leaflet.js"></script>
+    <script src="libs/xlsx/xlsx.full.min.js"></script>
+    <script src="libs/docx-preview/jszip.min.js"></script>
+    <script src="libs/docx-preview/docx-preview.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            background: #f0f2f5;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            overflow: hidden;
+        }
+        #app {
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            padding: 4px 12px;
+            background: rgba(240, 242, 245, 0.95);
+            border-bottom: 1px solid #d9d9d9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 1000;
+            height: 44px;
+        }
+        #controls label { font-weight: bold; font-size: 13px; white-space: nowrap; }
+        #fileInput { padding: 2px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+        .btn {
+            padding: 4px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #e6f7ff; }
+        .btn.active {
+            background: #1890ff;
+            color: white;
+            border-color: #1890ff;
+        }
+        .btn.active:hover { background: #40a9ff; }
+
+        .dropdown-trigger {
+            position: relative;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 10px;
+            cursor: pointer;
+            user-select: none;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .dropdown-trigger:hover { background: #e6f7ff; }
+        .dropdown-trigger .arrow { font-size: 10px; }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            padding: 8px 12px;
+            min-width: 260px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 2000;
+            margin-top: 4px;
+            white-space: nowrap;
+        }
+        .dropdown-content.show { display: block; }
+        .dropdown-content .panel-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 13px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 2px;
+        }
+        .search-box {
+            width: 100%;
+            padding: 3px 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-bottom: 6px;
+            box-sizing: border-box;
+        }
+        .route-control-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .route-control-item:last-child { border-bottom: none; }
+        .route-control-item input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; }
+        .route-control-item input[type="color"] { width: 20px; height: 20px; border: none; padding: 0; cursor: pointer; background: none; }
+        .route-control-item label { font-size: 12px; cursor: pointer; flex: 1; }
+        .select-all-item { font-weight: bold; border-bottom: 2px solid #ddd; margin-bottom: 2px; padding-bottom: 4px; }
+
+        #map-wrapper {
+            position: relative;
+            height: calc(100vh - 44px);
+            width: 100%;
+            overflow: hidden;
+            background: #e8e8e8;
+        }
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            transform-origin: center center;
+            transition: transform 0.3s ease;
+        }
+
+        #map-wrapper.highlight-mode .leaflet-tile-pane {
+            filter: grayscale(0.65) brightness(1.3) contrast(0.7);
+            opacity: 0.55;
+            transition: filter 0.3s, opacity 0.3s;
+        }
+
+        #cadFrame {
+            position: fixed;
+            border: 3px double #000;
+            pointer-events: none;
+            display: none;
+            z-index: 900;
+        }
+        #cadFrame .inner {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            border: 1px solid #000;
+        }
+
+        #cadTitleBlock {
+            position: fixed;
+            border: 1px solid #000;
+            background: white;
+            padding: 6px 12px;
+            font-size: 12px;
+            line-height: 1.5;
+            text-align: center;
+            width: 180px;
+            box-sizing: border-box;
+            display: none;
+            z-index: 901;
+        }
+        #cadTitleBlock .title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .cad-dimension {
+            background: transparent !important;
+            font-size: 15px;
+            font-weight: bold;
+            font-family: "SimSun", "宋体", serif;
+            white-space: nowrap;
+            border: none;
+            padding: 1px 3px;
+            line-height: 1;
+            box-shadow: none !important;
+            text-shadow: none !important;
+        }
+
+        .custom-label {
+            background: rgba(255, 140, 0, 0.9);
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+            font-weight: bold;
+            white-space: nowrap;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            pointer-events: auto;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: none !important;
+            text-shadow: none !important;
+            display: inline-block !important;
+            width: auto !important;
+            height: auto !important;
+        }
+
+        .custom-label-red {
+            background: rgba(220, 0, 0, 0.9);
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+            font-weight: bold;
+            white-space: nowrap;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            pointer-events: auto;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: none !important;
+            text-shadow: none !important;
+            display: inline-block !important;
+            width: auto !important;
+            height: auto !important;
+        }
+
+        .custom-label-module {
+            background: rgba(0, 70, 220, 0.9);
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+            font-weight: bold;
+            white-space: nowrap;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            pointer-events: auto;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: none !important;
+            text-shadow: none !important;
+            display: inline-block !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        .custom-label-red .star, .custom-label .star {
+            font-size: 20px !important;
+            color: #FFD700 !important;
+            display: inline-block;
+            line-height: 1;
+            vertical-align: middle;
+            margin-right: 2px;
+        }
+        .custom-label-module .triangle, .custom-label .triangle {
+            font-size: 16px !important;
+            color: #FFD700 !important;
+            display: inline-block;
+            line-height: 1;
+            vertical-align: middle;
+            margin-right: 2px;
+        }
+
+        .endpoint-label-red {
+            background: rgba(255, 0, 0, 0.5);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            pointer-events: auto;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: none !important;
+            text-shadow: none !important;
+            display: inline-block !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        .endpoint-label-module {
+            background: rgba(0, 70, 220, 0.85);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            pointer-events: auto;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: none !important;
+            text-shadow: none !important;
+            display: inline-block !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        .endpoint-label-red .star, .endpoint-label-module .triangle {
+            font-size: 16px !important;
+            color: #FFD700 !important;
+            display: inline-block;
+            line-height: 1;
+            vertical-align: middle;
+            margin-right: 2px;
+        }
+
+        .endpoint-label {
+            background: rgba(255, 255, 0, 0.7);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            border: 1px solid #333;
+            pointer-events: auto;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: none !important;
+            text-shadow: none !important;
+            display: inline-block !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        .endpoint-label .star, .endpoint-label .triangle {
+            font-size: 16px !important;
+            display: inline-block;
+            line-height: 1;
+            vertical-align: middle;
+            margin-right: 2px;
+        }
+
+        .length-label-transparent,
+        .length-label-transparent.leaflet-div-icon {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            font-size: 23px;
+            font-weight: bold;
+            white-space: nowrap;
+            padding: 1px 4px;
+            line-height: 1;
+            text-shadow: none !important;
+            display: inline-block !important;
+            width: auto !important;
+            height: auto !important;
+        }
+
+        #map-wrapper.cad-mode .endpoint-label,
+        #map-wrapper.cad-mode .endpoint-label-red,
+        #map-wrapper.cad-mode .endpoint-label-module {
+            background: rgba(255, 255, 255, 0.75) !important;
+            border: none !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+        }
+
+        #map-wrapper.cad-mode .star,
+        #map-wrapper.cad-mode .triangle {
+            display: none !important;
+        }
+
+        .invisible-marker {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            pointer-events: none !important;
+        }
+
+        #totalLengthDisplay {
+            position: fixed;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: red;
+            font-size: 28px;
+            font-weight: bold;
+            z-index: 1500;
+            pointer-events: none;
+            display: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+        #jifangCountDisplay {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: red;
+            font-size: 28px;
+            font-weight: bold;
+            z-index: 1500;
+            pointer-events: none;
+            display: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+        #moduleCountDisplay {
+            position: fixed;
+            top: 115px;
+            left: 50%;
+            transform: translateX(calc(-50% - 14px));
+            background: transparent;
+            color: red;
+            font-size: 28px;
+            font-weight: bold;
+            z-index: 1500;
+            pointer-events: none;
+            display: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        #docPreviewOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 99999;
+            display: none;
+            flex-direction: column;
+        }
+        #docPreviewOverlay.show { display: flex; }
+        #docPreviewBar {
+            background: #fff;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            flex-shrink: 0;
+        }
+        #docPreviewBar .doc-title {
+            font-weight: bold;
+            font-size: 15px;
+            color: #333;
+        }
+        #docPreviewBar button {
+            padding: 4px 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #1890ff;
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        #docPreviewBar button:hover { background: #40a9ff; }
+        #docPreviewContent {
+            flex: 1;
+            overflow: auto;
+            background: #fff;
+            margin: 16px;
+            padding: 24px;
+            border-radius: 4px;
+        }
+
+        /* ===== 通用路径配置对话框 ===== */
+        #pathConfigOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 100000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #pathConfigOverlay.show { display: flex; }
+
+        #pathConfigDialog {
+            background: #fff;
+            border-radius: 8px;
+            padding: 28px 32px;
+            width: 560px;
+            max-width: 92vw;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+            font-size: 14px;
+            color: #333;
+        }
+        #pathConfigDialog h3 {
+            margin: 0 0 12px;
+            font-size: 18px;
+            color: #1890ff;
+        }
+        #pathConfigDialog p {
+            margin: 0 0 16px;
+            line-height: 1.7;
+            color: #666;
+            white-space: pre-line;
+        }
+        #pathConfigDisplay {
+            background: #f5f7fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 10px 14px;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            color: #333;
+            word-break: break-all;
+            margin-bottom: 16px;
+            min-height: 20px;
+        }
+        .path-config-btns {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .path-config-btns button {
+            padding: 8px 24px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .path-config-btns button:hover:not(:disabled) {
+            background: #e6f7ff;
+            border-color: #1890ff;
+        }
+        #pathConfigConfirmBtn {
+            background: #1890ff;
+            color: #fff;
+            border-color: #1890ff;
+        }
+        #pathConfigConfirmBtn:hover:not(:disabled) {
+            background: #40a9ff !important;
+        }
+        .path-config-btns button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .path-config-error {
+            color: #ff4d4f;
+            font-size: 13px;
+            margin-top: 12px;
+            min-height: 18px;
+        }
+        .path-config-hint {
+            color: #fa8c16;
+            font-size: 12px;
+            margin-top: 8px;
+            line-height: 1.5;
+            padding: 6px 8px;
+            background: #fff7e6;
+            border-left: 3px solid #fa8c16;
+            border-radius: 2px;
+        }
+
+        /* 【新增】启动失败提示层 */
+        #bootError {
+            position: fixed;
+            inset: 0;
+            background: #f0f2f5;
+            z-index: 999999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 40px;
+            text-align: center;
+            color: #333;
+        }
+        #bootError.show { display: flex; }
+        #bootError h2 {
+            color: #ff4d4f;
+            margin-bottom: 16px;
+        }
+        #bootError pre {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 16px;
+            border-radius: 6px;
+            max-width: 90vw;
+            overflow: auto;
+            text-align: left;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* ===== 打印样式 ===== */
+        @media print {
+            @page {
+                size: A3 landscape;
+                margin: 5mm;
+            }
+
+            html, body {
+                width: 100vw !important;
+                height: 100vh !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+            }
+
+            #controls,
+            .leaflet-control-zoom,
+            .leaflet-control-attribution,
+            #pathConfigOverlay,
+            #docPreviewOverlay,
+            #bootError { display: none !important; }
+
+            #map-wrapper {
+                position: static !important;
+                width: auto !important;
+                height: auto !important;
+                overflow: visible !important;
+                background: #fff !important;
+            }
+
+            #map {
+                position: fixed !important;
+                top: 5px !important;
+                left: 5px !important;
+                right: 5px !important;
+                bottom: 5px !important;
+                width: auto !important;
+                height: auto !important;
+                margin: 0 !important;
+                transform: none !important;
+                transition: none !important;
+            }
+
+            #cadFrame {
+                display: block !important;
+                position: fixed !important;
+                top: 5px !important;
+                left: 5px !important;
+                right: 5px !important;
+                bottom: 5px !important;
+                width: auto !important;
+                height: auto !important;
+                margin: 0 !important;
+                border: 3px double #000 !important;
+                transform: none !important;
+                z-index: 9999 !important;
+                pointer-events: none !important;
+            }
+
+            #cadFrame::before { display: none !important; }
+
+            #cadTitleBlock {
+                display: block !important;
+                position: fixed !important;
+                right: 20px !important;
+                bottom: 20px !important;
+                z-index: 10000 !important;
+            }
+
+            #totalLengthDisplay,
+            #jifangCountDisplay,
+            #moduleCountDisplay {
+                position: fixed !important;
+                left: 50% !important;
+            }
+            #totalLengthDisplay { top: 35px !important; transform: translateX(-50%) !important; }
+            #jifangCountDisplay { top: 65px !important; transform: translateX(-50%) !important; }
+            #moduleCountDisplay { top: 100px !important; transform: translateX(calc(-50% - 14px)) !important; }
+        }
+
+        @media (max-width: 700px) {
+            #controls { height: auto; padding: 6px 10px; }
+            #map-wrapper { height: calc(100vh - 80px); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 【新增】启动失败提示层 -->
+    <div id="bootError">
+        <h2>软件启动异常</h2>
+        <p>页面脚本执行出错，请将以下错误信息反馈给开发人员：</p>
+        <pre id="bootErrorMsg"></pre>
+    </div>
+
+    <div id="app">
+        <div id="controls">
+             <button class="btn" id="mapPathBtn" title="重新配置电子地图文件夹">地图路径</button>
+            <button class="btn" id="docPathBtn" title="重新配置文档存储文件夹">文档路径</button> 
+           <button class="btn" id="selectFileBtn" title="重新配置数据源">数据路径</button>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;" />
+
+
+            <div class="dropdown-trigger" id="dropdownTrigger">
+                <span>光缆</span>
+                <span class="arrow">▼</span>
+                <div class="dropdown-content" id="dropdownContent">
+                    <input type="text" class="search-box" id="searchBox" placeholder="搜索光缆或管井名称..." />
+                    <div class="panel-title">显示/颜色</div>
+                    <div id="routeControls"></div>
+                </div>
+            </div>
+
+            <button class="btn" id="jifangBtn">机房</button>
+            <button class="btn" id="moduleBtn">模块局</button>
+            <button class="btn" id="lengthBtn">[L]长度</button>
+            <button class="btn" id="totalLengthBtn">[T]总长</button>
+            <button class="btn" id="whiteBgBtn">白底</button>
+            <button class="btn" id="labelToggleBtn">标签</button>
+            <button class="btn" id="highlightBtn">突显</button>
+            <button class="btn" id="printBtn">打印</button>
+            <button class="btn" id="refreshBtn">刷新</button>
+            <button class="btn" id="fullscreenBtn"> 全屏</button>
+        </div>
+
+        <div id="totalLengthDisplay"></div>
+        <div id="jifangCountDisplay"></div>
+        <div id="moduleCountDisplay"></div>
+        <div id="map-wrapper">
+            <div id="map"></div>
+        </div>
+
+        <div id="cadFrame">
+            <div class="inner"></div>
+        </div>
+
+        <div id="cadTitleBlock">
+            <div class="title">光缆路由竣工图</div>
+            <div id="cadDate"></div>
+        </div>
+
+        <div id="docPreviewOverlay">
+            <div id="docPreviewBar">
+                <span class="doc-title" id="docPreviewTitle"></span>
+                <button id="docPreviewClose">关闭</button>
+            </div>
+            <div id="docPreviewContent"></div>
+        </div>
+
+        <div id="pathConfigOverlay">
+            <div id="pathConfigDialog">
+                <h3 id="pathConfigTitle">请选择文件</h3>
+                <p id="pathConfigDesc"></p>
+                <div id="pathConfigDisplay">尚未选择</div>
+                <div class="path-config-btns">
+                    <button id="pathConfigSelectBtn">选择文件</button>
+                    <button id="pathConfigConfirmBtn" disabled>确认</button>
+                </div>
+                <div id="pathConfigError" class="path-config-error"></div>
+                <div id="pathConfigHint" class="path-config-hint" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 【新增】全局错误捕获 ====================
+        (function setupGlobalErrorHandler() {
+            function showBootError(msg) {
+                try {
+                    const el = document.getElementById('bootError');
+                    const msgEl = document.getElementById('bootErrorMsg');
+                    if (el && msgEl) {
+                        msgEl.textContent = String(msg);
+                        el.classList.add('show');
+                    }
+                } catch (e) {
+                    console.error('无法显示错误信息:', e);
+                }
+            }
+
+            window.addEventListener('error', function(e) {
+                console.error('全局错误:', e.message, e.filename, e.lineno);
+                if (!window.__appBooted) {
+                    showBootError(e.message + '\n位置: ' + e.filename + ':' + e.lineno);
+                }
+            });
+
+            window.addEventListener('unhandledrejection', function(e) {
+                console.error('未处理的 Promise 异常:', e.reason);
+                if (!window.__appBooted) {
+                    showBootError('Promise 异常: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+                }
+            });
+
+            setTimeout(function() {
+                if (!window.__appBooted) {
+                    const mapEl = document.getElementById('map');
+                    if (mapEl && !window.map) {
+                        showBootError('软件启动超时。可能是 Leaflet 库未正确加载，或页面资源路径错误。\n请检查 libs 文件夹是否完整。');
+                    }
+                }
+            }, 5000);
+        })();
+
+        // ==================== 常量 ====================
+        const ROUTE_SHEET_NAME = '路由';
+        const NODE_SHEET_NAME = '节点';
+        const NODE_NAME_IDX = 1;
+        const NODE_LNG_IDX = 2;
+        const NODE_LAT_IDX = 3;
+        const NODE_DESC_IDX = 4;
+        const LINE_WIDTH = 5;
+        const MID_LABEL_FONT_SIZE = 13;
+        const A3_RATIO = 420 / 297;
+
+        const MIN_ZOOM = 7;
+        const MAX_ZOOM = 18;
+        const WHITE_BG_MAX_ZOOM = 20;
+
+        let map;
+        let canvasRenderer = null;
+        let tileLayer = null;
+        let allRoutesData = {};
+        let routeColorMap = {};
+        let routeVisibility = {};
+        let currentLayers = [];
+        let currentNodes = [];
+        let currentEndpoints = [];
+        let closeTimer = null;
+
+        let showJifangOnly = false;
+        let showModuleOnly = false;
+        let showLength = false;
+        let showTotalLength = false;
+        let isWhiteBg = false;
+        let showEndpointLabels = true;
+        let isHighlight = false;
+
+        let activeRouteIds = new Set();
+        let routeNodesMap = new Map();
+
+        let drawnNodeLabelKeys = new Set();
+        let midLabelPlacementCache = new Map();
+        // 【改进】缓存容器尺寸，避免频繁调用 map.getSize()
+        let cachedContainerSize = { x: 0, y: 0 };
+
+        let routeClickTimer = null;
+        let endpointClickTimer = null;
+
+        let isPrinting = false;
+        let drawMapPending = false;
+
+        // ==================== 路径配置管理 ====================
+        const MAP_FOLDER_STORAGE_KEY = 'glight_map_folder_path';
+        const DOC_FOLDER_STORAGE_KEY = 'glight_doc_folder_path';
+        const EXCEL_FILE_STORAGE_KEY = 'glight_excel_file_path';
+        const CONFIG_FILE_NAME = 'glight_config.json';
+
+        let roadmapBaseUrl = null;
+        let currentRoadmapPath = null;
+
+        let docBaseDir = null;
+        let currentDocPath = null;
+
+        let currentExcelPath = null;
+
+        let currentConfigType = null;
+
+        let pathConfigQueue = [];
+        let pathConfigShowing = false;
+
+        // ==================== 环境判断 ====================
+        function isTauriEnv() {
+            try {
+                return !!(window.__TAURI__ && window.__TAURI__.core);
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function isElectronEnv() {
+            try {
+                if (window.electronAPI) return true;
+                if (window.electron && window.electron.ipcRenderer) return true;
+                if (navigator.userAgent && navigator.userAgent.indexOf('Electron') !== -1) return true;
+            } catch (e) {}
+            return false;
+        }
+
+        // 【新增】判断是否为纯浏览器环境（无法访问本地文件系统）
+        function isBrowserEnv() {
+            return !isTauriEnv() && !isElectronEnv();
+        }
+
+        // 【新增】浏览器环境能力提示文案
+        const BROWSER_ENV_HINT = '注意：当前运行在浏览器环境中，无法直接读取本地文件夹的完整路径。\n' +
+            '地图与文档功能需要桌面客户端（Tauri / Electron）才能正常使用。\n' +
+            '如需在浏览器中临时体验，可通过“数据路径”按钮上传 Excel 文件。';
+
+        // ==================== 通用：打开原生选择对话框 ====================
+        async function openNativeDialog(type, options) {
+            options = options || {};
+            const isFolder = (type === 'folder');
+
+            if (isElectronEnv()) {
+                const api = window.electronAPI || window.electron || {};
+                if (api.showOpenDialog) {
+                    try {
+                        const result = await api.showOpenDialog({
+                            properties: isFolder ? ['openDirectory'] : ['openFile'],
+                            filters: options.filters || [],
+                            title: options.title || '请选择'
+                        });
+                        if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+                            return result.filePaths[0];
+                        }
+                        return null;
+                    } catch (e) {
+                        console.error('Electron 对话框调用失败:', e);
+                    }
+                }
+                if (api.ipcRenderer && api.ipcRenderer.invoke) {
+                    try {
+                        const result = await api.ipcRenderer.invoke('show-open-dialog', {
+                            properties: isFolder ? ['openDirectory'] : ['openFile'],
+                            filters: options.filters || [],
+                            title: options.title || '请选择'
+                        });
+                        if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+                            return result.filePaths[0];
+                        }
+                        return null;
+                    } catch (e) {
+                        console.error('Electron IPC 对话框调用失败:', e);
+                    }
+                }
+            }
+
+            if (isTauriEnv() && window.__TAURI__.dialog && window.__TAURI__.dialog.open) {
+                try {
+                    const selected = await window.__TAURI__.dialog.open({
+                        directory: isFolder,
+                        multiple: false,
+                        title: options.title || '请选择',
+                        filters: options.filters || []
+                    });
+                    return selected || null;
+                } catch (e) {
+                    console.error('Tauri 对话框调用失败:', e);
+                }
+            }
+
+            if (!isFolder && window.showOpenFilePicker) {
+                try {
+                    const handles = await window.showOpenFilePicker({
+                        multiple: false,
+                        types: options.filters || []
+                    });
+                    const file = await handles[0].getFile();
+                    return file.name;
+                } catch (e) {
+                    if (e.name !== 'AbortError') console.error(e);
+                    return null;
+                }
+            }
+            if (isFolder && window.showDirectoryPicker) {
+                try {
+                    const handle = await window.showDirectoryPicker({ mode: 'read' });
+                    return handle.name;
+                } catch (e) {
+                    if (e.name !== 'AbortError') console.error(e);
+                    return null;
+                }
+            }
+
+            return null;
+        }
+
+        // ==================== 通用：读取本地文件 ====================
+        async function readLocalFileAsArrayBuffer(filePath) {
+            if (isTauriEnv() && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
+                try {
+                    const assetUrl = window.__TAURI__.core.convertFileSrc(filePath);
+                    const resp = await fetch(assetUrl);
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return await resp.arrayBuffer();
+                } catch (e) {
+                    console.error('Tauri 读取文件失败:', e);
+                    return null;
+                }
+            }
+            if (isElectronEnv()) {
+                const api = window.electronAPI || window.electron || {};
+                if (api.readFile) {
+                    try {
+                        const result = await api.readFile(filePath);
+                        if (result instanceof ArrayBuffer) return result;
+                        if (result && result.buffer) return result.buffer;
+                        if (result && result.data) {
+                            const bin = atob(result.data);
+                            const len = bin.length;
+                            const bytes = new Uint8Array(len);
+                            for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+                            return bytes.buffer;
+                        }
+                    } catch (e) {
+                        console.error('Electron 读取文件失败:', e);
+                    }
+                }
+                if (api.ipcRenderer && api.ipcRenderer.invoke) {
+                    try {
+                        const result = await api.ipcRenderer.invoke('read-file', filePath);
+                        if (result instanceof ArrayBuffer) return result;
+                        if (result && result.buffer) return result.buffer;
+                        if (result && result.data) {
+                            const bin = atob(result.data);
+                            const len = bin.length;
+                            const bytes = new Uint8Array(len);
+                            for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+                            return bytes.buffer;
+                        }
+                    } catch (e) {
+                        console.error('Electron IPC 读取文件失败:', e);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // ==================== 通用：本地路径转 URL ====================
+        function localPathToUrl(filePath) {
+            if (!filePath) return null;
+            try {
+                if (filePath.startsWith('http') || filePath.startsWith('asset://') || filePath.startsWith('file://')) {
+                    return filePath;
+                }
+                if (isTauriEnv() && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
+                    return window.__TAURI__.core.convertFileSrc(filePath);
+                }
+                if (isElectronEnv()) {
+                    let p = filePath.replace(/\\/g, '/');
+                    if (!p.startsWith('/')) p = '/' + p;
+                    return 'file://' + encodeURI(p);
+                }
+            } catch (e) {
+                console.error('路径转换失败:', e);
+            }
+            return filePath;
+        }
+
+        // ==================== 配置文件路径 ====================
+        async function getConfigFilePath() {
+            if (isTauriEnv() && window.__TAURI__.path && window.__TAURI__.path.appDataDir) {
+                try {
+                    const appData = await window.__TAURI__.path.appDataDir();
+                    return appData.replace(/\\/g, '/').replace(/\/+$/, '') + '/' + CONFIG_FILE_NAME;
+                } catch (e) {
+                    console.warn('获取 appDataDir 失败：' + e.message);
+                }
+            }
+            if (isElectronEnv()) {
+                const api = window.electronAPI || window.electron || {};
+                if (api.getConfigPath) {
+                    try {
+                        return await api.getConfigPath();
+                    } catch (e) {
+                        console.warn('Electron 获取配置路径失败:', e);
+                    }
+                }
+                if (api.ipcRenderer && api.ipcRenderer.invoke) {
+                    try {
+                        return await api.ipcRenderer.invoke('get-config-path');
+                    } catch (e) {
+                        console.warn('Electron IPC 获取配置路径失败:', e);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // ==================== 读取配置 ====================
+        async function loadConfig() {
+            if (isTauriEnv() && window.__TAURI__.fs) {
+                try {
+                    const configPath = await getConfigFilePath();
+                    if (configPath) {
+                        let exists = false;
+                        if (window.__TAURI__.fs.exists) {
+                            exists = await window.__TAURI__.fs.exists(configPath);
+                        }
+                        if (exists) {
+                            let content = null;
+                            if (window.__TAURI__.fs.readTextFile) {
+                                content = await window.__TAURI__.fs.readTextFile(configPath);
+                            } else if (window.__TAURI__.fs.readFile) {
+                                const bytes = await window.__TAURI__.fs.readFile(configPath);
+                                content = new TextDecoder().decode(bytes);
+                            }
+                            if (content) {
+                                const cfg = JSON.parse(content);
+                                console.log('已从文件读取配置：', cfg);
+                                return cfg;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('读取配置文件失败，回退 localStorage：' + e.message);
+                }
+            }
+            if (isElectronEnv()) {
+                try {
+                    const configPath = await getConfigFilePath();
+                    if (configPath) {
+                        const content = await readLocalFileAsArrayBuffer(configPath);
+                        if (content) {
+                            const text = new TextDecoder().decode(content);
+                            const cfg = JSON.parse(text);
+                            console.log('已从 Electron 文件读取配置：', cfg);
+                            return cfg;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Electron 读取配置失败，回退 localStorage:', e);
+                }
+            }
+            try {
+                const cfg = {
+                    mapPath: localStorage.getItem(MAP_FOLDER_STORAGE_KEY) || null,
+                    docPath: localStorage.getItem(DOC_FOLDER_STORAGE_KEY) || null,
+                    excelPath: localStorage.getItem(EXCEL_FILE_STORAGE_KEY) || null
+                };
+                console.log('已从 localStorage 读取配置：', cfg);
+                return cfg;
+            } catch (e) {
+                return { mapPath: null, docPath: null, excelPath: null };
+            }
+        }
+
+        // ==================== 保存配置 ====================
+        async function saveConfig(cfg) {
+            try {
+                if (cfg.mapPath) localStorage.setItem(MAP_FOLDER_STORAGE_KEY, cfg.mapPath);
+                if (cfg.docPath) localStorage.setItem(DOC_FOLDER_STORAGE_KEY, cfg.docPath);
+                if (cfg.excelPath) localStorage.setItem(EXCEL_FILE_STORAGE_KEY, cfg.excelPath);
+            } catch (e) {
+                console.warn('写入 localStorage 失败：' + e.message);
+            }
+            const content = JSON.stringify(cfg, null, 2);
+
+            if (isTauriEnv() && window.__TAURI__.fs) {
+                try {
+                    const configPath = await getConfigFilePath();
+                    if (configPath) {
+                        if (window.__TAURI__.fs.writeTextFile) {
+                            await window.__TAURI__.fs.writeTextFile(configPath, content);
+                        } else if (window.__TAURI__.fs.writeFile) {
+                            await window.__TAURI__.fs.writeFile(configPath, new TextEncoder().encode(content));
+                        }
+                        console.log('配置已写入 Tauri 文件：' + configPath);
+                    }
+                } catch (e) {
+                    console.warn('Tauri 写入配置文件失败：' + e.message);
+                }
+            }
+
+            if (isElectronEnv()) {
+                const api = window.electronAPI || window.electron || {};
+                if (api.writeConfig) {
+                    try {
+                        await api.writeConfig(content);
+                        console.log('配置已通过 Electron IPC 写入');
+                    } catch (e) {
+                        console.warn('Electron 写配置失败:', e);
+                    }
+                } else if (api.ipcRenderer && api.ipcRenderer.invoke) {
+                    try {
+                        await api.ipcRenderer.invoke('write-config', content);
+                        console.log('配置已通过 Electron IPC 写入');
+                    } catch (e) {
+                        console.warn('Electron IPC 写配置失败:', e);
+                    }
+                }
+            }
+        }
+
+        // ==================== 路径规范化 ====================
+        function normalizeRoadmapPath(p) {
+            if (!p) return null;
+            p = p.replace(/\\/g, '/').replace(/\/+$/, '');
+            if (p.toLowerCase().endsWith('/roadmap')) {
+                return p;
+            }
+            return p + '/roadmap';
+        }
+
+        function normalizeDocPath(p) {
+            if (!p) return null;
+            return p.replace(/\\/g, '/').replace(/\/+$/, '');
+        }
+
+        function normalizeExcelPath(p) {
+            if (!p) return null;
+            return p.replace(/\\/g, '/');
+        }
+
+        // ==================== 路径配置对话框 ====================
+        function showPathConfigDialog(type, message) {
+            if (pathConfigShowing) {
+                pathConfigQueue.push({ type: type, message: message });
+                return;
+            }
+            _doShowPathConfigDialog(type, message);
+        }
+
+        function _doShowPathConfigDialog(type, message) {
+            pathConfigShowing = true;
+            currentConfigType = type;
+            const overlay = document.getElementById('pathConfigOverlay');
+            const titleEl = document.getElementById('pathConfigTitle');
+            const descEl = document.getElementById('pathConfigDesc');
+            const displayEl = document.getElementById('pathConfigDisplay');
+            const errorEl = document.getElementById('pathConfigError');
+            const confirmBtn = document.getElementById('pathConfigConfirmBtn');
+            const selectBtn = document.getElementById('pathConfigSelectBtn');
+            // 【新增】浏览器环境提示
+            const hintEl = document.getElementById('pathConfigHint');
+
+            if (type === 'map') {
+                titleEl.textContent = '请选择电子地图文件夹';
+                descEl.textContent = '软件需要“roadmap”电子地图文件夹才能正常运行。\n' +
+                    '请直接选择 roadmap 文件夹本身。';
+                selectBtn.textContent = '选择文件夹';
+            } else if (type === 'doc') {
+                titleEl.textContent = '请选择文档存储文件夹';
+                descEl.textContent = '软件需要“文档”文件夹用于存放光缆竣工资料、故障记录、维修记录等文档。\n' +
+                    '双击光缆折线时，将从此文件夹中打开对应文档。请选择存放这些文档的文件夹。';
+                selectBtn.textContent = '选择文件夹';
+            } else if (type === 'excel') {
+                titleEl.textContent = '请选择光缆数据文件';
+                descEl.textContent = '软件需要加载按固定格式保存的 Excel 数据文件（.xlsx 或 .xls）。\n' +
+                    '该文件必须包含“路由”和“节点”两个工作表。请选择该 Excel 文件。';
+                selectBtn.textContent = '选择文件';
+            }
+
+            displayEl.textContent = '尚未选择';
+            errorEl.textContent = message || '';
+            confirmBtn.disabled = true;
+            window.__pendingPath = null;
+
+            // 【新增】浏览器环境下，地图/文档路径功能受限，给出明确提示
+            if (hintEl) {
+                if (isBrowserEnv() && (type === 'map' || type === 'doc')) {
+                    hintEl.textContent = BROWSER_ENV_HINT;
+                    hintEl.style.display = 'block';
+                } else {
+                    hintEl.textContent = '';
+                    hintEl.style.display = 'none';
+                }
+            }
+
+            overlay.classList.add('show');
+        }
+
+        function hidePathConfigDialog() {
+            document.getElementById('pathConfigOverlay').classList.remove('show');
+            currentConfigType = null;
+            pathConfigShowing = false;
+
+            if (pathConfigQueue.length > 0) {
+                const next = pathConfigQueue.shift();
+                setTimeout(function() {
+                    _doShowPathConfigDialog(next.type, next.message);
+                }, 300);
+            }
+        }
+
+        // ==================== 应用路径 ====================
+        function applyRoadmapPath(roadmapPath) {
+            currentRoadmapPath = roadmapPath;
+            const baseUrl = localPathToUrl(roadmapPath);
+            if (!baseUrl) {
+                console.warn('无法转换地图路径：' + roadmapPath);
+                return;
+            }
+            roadmapBaseUrl = baseUrl.replace(/\/+$/, '');
+
+            if (map && tileLayer && map.hasLayer(tileLayer)) {
+                map.removeLayer(tileLayer);
+            }
+            const tileUrl = roadmapBaseUrl + '/{z}/{x}/{y}.png';
+            tileLayer = L.tileLayer(tileUrl, {
+                minZoom: MIN_ZOOM,
+                maxZoom: MAX_ZOOM,
+                attribution: ''
+            });
+            if (!isWhiteBg && map) {
+                tileLayer.addTo(map);
+            }
+            console.log('电子地图路径已应用：' + tileUrl);
+
+            if (map) {
+                setTimeout(function() {
+                    try {
+                        map.invalidateSize({ animate: false, pan: false });
+                        const center = map.getCenter();
+                        map.setView(center, map.getZoom(), { animate: false });
+                    } catch (e) {
+                        console.warn('地图刷新失败:', e);
+                    }
+                }, 100);
+            }
+        }
+
+        function applyDocPath(docPath) {
+            currentDocPath = docPath;
+            const url = localPathToUrl(docPath);
+            docBaseDir = (url || docPath).replace(/\/+$/, '') + '/';
+            console.log('文档路径已应用：' + docBaseDir);
+        }
+
+        // ==================== 自动加载 Excel ====================
+        async function loadExcelFromPath(excelPath) {
+            const normalized = normalizeExcelPath(excelPath);
+            currentExcelPath = normalized;
+
+            const buffer = await readLocalFileAsArrayBuffer(normalized);
+            if (buffer) {
+                console.log('已自动加载 Excel：' + normalized);
+                processExcelArrayBuffer(buffer);
+                return true;
+            }
+            return false;
+        }
+
+        // ==================== 初始化三个路径 ====================
+        async function initRoadmapPath() {
+            try {
+                const cfg = await loadConfig();
+                const saved = cfg.mapPath;
+                if (saved) {
+                    const normalized = normalizeRoadmapPath(saved);
+                    applyRoadmapPath(normalized);
+                    return true;
+                } else {
+                    showPathConfigDialog('map', '首次运行，请选择电子地图文件夹。');
+                    return false;
+                }
+            } catch (e) {
+                console.error('initRoadmapPath 失败:', e);
+                return false;
+            }
+        }
+
+        async function initDocPath() {
+            try {
+                const cfg = await loadConfig();
+                const saved = cfg.docPath;
+                if (saved) {
+                    const normalized = normalizeDocPath(saved);
+                    applyDocPath(normalized);
+                    return true;
+                } else {
+                    showPathConfigDialog('doc', '首次运行，请选择文档存储文件夹。');
+                    return false;
+                }
+            } catch (e) {
+                console.error('initDocPath 失败:', e);
+                return false;
+            }
+        }
+
+        async function initExcelPath() {
+            try {
+                const cfg = await loadConfig();
+                const saved = cfg.excelPath;
+                if (saved) {
+                    const ok = await loadExcelFromPath(saved);
+                    if (ok) {
+                        return true;
+                    } else {
+                        showPathConfigDialog('excel', '原数据文件无法读取，请重新选择：' + saved);
+                        return false;
+                    }
+                } else {
+                    showPathConfigDialog('excel', '首次运行，请选择光缆数据文件（Excel）。');
+                    return false;
+                }
+            } catch (e) {
+                console.error('initExcelPath 失败:', e);
+                return false;
+            }
+        }
+
+        // ==================== 绑定对话框按钮 ====================
+        function bindPathConfigEvents() {
+            const selectBtn = document.getElementById('pathConfigSelectBtn');
+            const confirmBtn = document.getElementById('pathConfigConfirmBtn');
+            const displayEl = document.getElementById('pathConfigDisplay');
+            const errorEl = document.getElementById('pathConfigError');
+
+            selectBtn.addEventListener('click', async function() {
+                errorEl.textContent = '';
+                const type = currentConfigType;
+                if (!type) return;
+
+                try {
+                    if (type === 'excel') {
+                        const selected = await openNativeDialog('file', {
+                            title: '请选择光缆数据文件（Excel）',
+                            filters: [{ name: 'Excel 文件', extensions: ['xlsx', 'xls'] }]
+                        });
+                        if (!selected) return;
+                        const normalized = normalizeExcelPath(selected);
+                        displayEl.textContent = normalized;
+                        window.__pendingPath = normalized;
+                        confirmBtn.disabled = false;
+                        errorEl.textContent = '';
+                        return;
+                    }
+
+                    const selected = await openNativeDialog('folder', {
+                        title: type === 'map'
+                            ? '请选择电子地图文件夹（含 roadmap 的目录）'
+                            : '请选择文档存储文件夹'
+                    });
+                    if (!selected) return;
+
+                    if (type === 'map') {
+                        const normalized = normalizeRoadmapPath(selected);
+                        displayEl.textContent = normalized;
+                        window.__pendingPath = normalized;
+                        confirmBtn.disabled = false;
+                        errorEl.textContent = '';
+                    } else {
+                        const normalized = normalizeDocPath(selected);
+                        displayEl.textContent = normalized;
+                        window.__pendingPath = normalized;
+                        confirmBtn.disabled = false;
+                        errorEl.textContent = '';
+                    }
+                } catch (e) {
+                    errorEl.textContent = '选择失败：' + e.message;
+                    console.error('选择对话框失败:', e);
+                }
+            });
+
+            confirmBtn.addEventListener('click', async function() {
+                const pending = window.__pendingPath;
+                const type = currentConfigType;
+                if (!pending || !type) return;
+
+                try {
+                    const cfg = await loadConfig();
+                    if (type === 'map') {
+                        cfg.mapPath = pending;
+                        applyRoadmapPath(pending);
+                    } else if (type === 'doc') {
+                        cfg.docPath = pending;
+                        applyDocPath(pending);
+                    } else if (type === 'excel') {
+                        cfg.excelPath = pending;
+                        currentExcelPath = pending;
+                    }
+                    await saveConfig(cfg);
+
+                    hidePathConfigDialog();
+
+                    if (type === 'excel') {
+                        setTimeout(function() {
+                            loadExcelFromPath(pending).catch(function(e) {
+                                console.error('加载 Excel 失败:', e);
+                            });
+                        }, 150);
+                    } else {
+                        setTimeout(function() {
+                            try {
+                                if (map) {
+                                    map.invalidateSize({ animate: false, pan: false });
+                                }
+                                if (Object.keys(allRoutesData).length > 0) {
+                                    drawMap();
+                                }
+                            } catch (e) {
+                                console.warn('配置后刷新失败:', e);
+                            }
+                        }, 150);
+                    }
+                } catch (e) {
+                    console.error('确认配置失败:', e);
+                }
+            });
+        }
+
+        // ==================== 打开文档 ====================
+        async function openDocument(filename) {
+            if (!filename) {
+                alert('该光缆未关联任何文档，请在路由表中第二列填写文件名。');
+                return;
+            }
+            if (!docBaseDir) {
+                alert('尚未配置文档存储文件夹，请先点击“文档路径”按钮进行配置。');
+                showPathConfigDialog('doc', '请先配置文档存储文件夹。');
+                return;
+            }
+
+            const fullPath = currentDocPath + '/' + filename;
+            const buffer = await readLocalFileAsArrayBuffer(fullPath);
+            if (buffer) {
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+                showDocPreview(blob, filename);
+                return;
+            }
+
+            const url = localPathToUrl(fullPath);
+            if (url) {
+                window.open(url, '_blank');
+            } else {
+                alert('无法读取文档：\n' + fullPath);
+            }
+        }
+
+        function showDocPreview(blob, filename) {
+            const overlay = document.getElementById('docPreviewOverlay');
+            const title = document.getElementById('docPreviewTitle');
+            const content = document.getElementById('docPreviewContent');
+            title.textContent = filename;
+            content.innerHTML = '<p style="color:#999;">正在渲染文档...</p>';
+            overlay.classList.add('show');
+            if (window.docx && window.docx.renderAsync) {
+                window.docx.renderAsync(blob, content, null, {
+                    className: 'docx-preview',
+                    inWrapper: true,
+                    ignoreWidth: false,
+                    ignoreHeight: false
+                }).catch(function(err) {
+                    content.innerHTML = '<p style="color:red;">渲染失败：' + err.message + '</p>';
+                });
+            } else {
+                content.innerHTML = '<p style="color:red;">docx-preview 库未加载。</p>';
+            }
+        }
+
+        function calcDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function estimateLabelWidth(text, fontSize) {
+            const fs = fontSize || MID_LABEL_FONT_SIZE;
+            let width = 0;
+            for (let i = 0; i < text.length; i++) {
+                const ch = text.charCodeAt(i);
+                width += (ch > 255) ? fs * 1.05 : fs * 0.6;
+            }
+            return width + 14;
+        }
+
+        function estimateLabelHeight(fontSize) {
+            return (fontSize || MID_LABEL_FONT_SIZE) + 6;
+        }
+
+        function pointInRect(x, y, rect) {
+            return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        }
+
+        function lineIntersectsLine(x1, y1, x2, y2, x3, y3, x4, y4) {
+            const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+            if (Math.abs(d) < 0.0001) return false;
+            const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d;
+            const u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
+            return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+        }
+
+        function lineIntersectsRect(x1, y1, x2, y2, rect) {
+            const lineMinX = x1 < x2 ? x1 : x2;
+            const lineMaxX = x1 < x2 ? x2 : x1;
+            const lineMinY = y1 < y2 ? y1 : y2;
+            const lineMaxY = y1 < y2 ? y2 : y1;
+
+            if (lineMaxX < rect.left || lineMinX > rect.right ||
+                lineMaxY < rect.top || lineMinY > rect.bottom) {
+                return false;
+            }
+
+            if (pointInRect(x1, y1, rect) || pointInRect(x2, y2, rect)) return true;
+
+            return (
+                lineIntersectsLine(x1, y1, x2, y2, rect.left, rect.top, rect.right, rect.top) ||
+                lineIntersectsLine(x1, y1, x2, y2, rect.right, rect.top, rect.right, rect.bottom) ||
+                lineIntersectsLine(x1, y1, x2, y2, rect.right, rect.bottom, rect.left, rect.bottom) ||
+                lineIntersectsLine(x1, y1, x2, y2, rect.left, rect.bottom, rect.left, rect.top)
+            );
+        }
+
+        function computeMidNodeLabelPlacement(point, allPoints, idx, labelText, fontSize) {
+            const cacheKey = point.lat.toFixed(6) + ',' + point.lng.toFixed(6) + '|' + labelText + '|' + fontSize;
+            const cached = midLabelPlacementCache.get(cacheKey);
+            if (cached) return cached;
+
+            const GAP = 4;
+            const LABEL_W = estimateLabelWidth(labelText, fontSize);
+            const LABEL_H = estimateLabelHeight(fontSize);
+
+            const curr = map.latLngToContainerPoint([point.lat, point.lng]);
+            // 【改进】使用缓存的容器尺寸
+            const W = cachedContainerSize.x;
+            const H = cachedContainerSize.y;
+
+            const segs = [];
+            if (idx > 0) {
+                const p = map.latLngToContainerPoint([allPoints[idx - 1].lat, allPoints[idx - 1].lng]);
+                segs.push({ x1: curr.x, y1: curr.y, x2: p.x, y2: p.y });
+            }
+            if (idx < allPoints.length - 1) {
+                const p = map.latLngToContainerPoint([allPoints[idx + 1].lat, allPoints[idx + 1].lng]);
+                segs.push({ x1: curr.x, y1: curr.y, x2: p.x, y2: p.y });
+            }
+
+            const candidates = [
+                { ox:  LABEL_W / 2 + GAP, oy: 0 },
+                { ox: -(LABEL_W / 2 + GAP), oy: 0 },
+                { ox: 0, oy: -(LABEL_H / 2 + GAP) },
+                { ox: 0, oy:  LABEL_H / 2 + GAP },
+                { ox:  LABEL_W / 2 + GAP, oy: -(LABEL_H / 2 + GAP) },
+                { ox: -(LABEL_W / 2 + GAP), oy: -(LABEL_H / 2 + GAP) },
+                { ox:  LABEL_W / 2 + GAP, oy:  LABEL_H / 2 + GAP },
+                { ox: -(LABEL_W / 2 + GAP), oy:  LABEL_H / 2 + GAP }
+            ];
+
+            let result = null;
+            for (let ci = 0; ci < candidates.length; ci++) {
+                const c = candidates[ci];
+                const labelCx = curr.x + c.ox;
+                const labelCy = curr.y + c.oy;
+                const rect = {
+                    left:   labelCx - LABEL_W / 2,
+                    right:  labelCx + LABEL_W / 2,
+                    top:    labelCy - LABEL_H / 2,
+                    bottom: labelCy + LABEL_H / 2
+                };
+
+                if (rect.left < 0 || rect.right > W || rect.top < 0 || rect.bottom > H) continue;
+
+                let conflict = false;
+                for (let si = 0; si < segs.length; si++) {
+                    const s = segs[si];
+                    if (lineIntersectsRect(s.x1, s.y1, s.x2, s.y2, rect)) {
+                        conflict = true;
+                        break;
+                    }
+                }
+
+                if (!conflict) {
+                    result = { offsetX: c.ox, offsetY: c.oy, labelW: LABEL_W, labelH: LABEL_H };
+                    break;
+                }
+            }
+
+            if (!result) {
+                result = { offsetX: LABEL_W / 2 + GAP, offsetY: 0, labelW: LABEL_W, labelH: LABEL_H };
+            }
+
+            midLabelPlacementCache.set(cacheKey, result);
+            return result;
+        }
+
+        function initMap() {
+            try {
+                if (typeof L === 'undefined') {
+                    throw new Error('Leaflet 库未加载（L 未定义）');
+                }
+
+                map = L.map('map', {
+                    minZoom: MIN_ZOOM,
+                    maxZoom: MAX_ZOOM
+                }).setView([30.659, 104.075], 13);
+
+                map.doubleClickZoom.disable();
+                map.attributionControl.setPrefix('');
+
+                canvasRenderer = L.canvas({ padding: 0.5 });
+                tileLayer = null;
+
+                // 【改进】初始化容器尺寸缓存
+                const initSize = map.getSize();
+                cachedContainerSize = { x: initSize.x, y: initSize.y };
+
+                map.on('click', function() {
+                    if (activeRouteIds.size > 0) {
+                        removeAllNodes();
+                    }
+                });
+
+                // 【改进】zoomend / moveend / resize 时更新尺寸缓存并清理缓存
+                map.on('zoomend', function() {
+                    const sz = map.getSize();
+                    cachedContainerSize = { x: sz.x, y: sz.y };
+                    midLabelPlacementCache.clear();
+                    if (showLength) {
+                        redrawLengthLabels();
+                    }
+                });
+
+                map.on('moveend', function() {
+                    const sz = map.getSize();
+                    cachedContainerSize = { x: sz.x, y: sz.y };
+                    midLabelPlacementCache.clear();
+                });
+
+                map.on('resize', function() {
+                    const sz = map.getSize();
+                    cachedContainerSize = { x: sz.x, y: sz.y };
+                    midLabelPlacementCache.clear();
+                });
+
+                bindPathConfigEvents();
+
+                setTimeout(function() {
+                    try {
+                        map.invalidateSize({ animate: false, pan: false });
+                        const sz = map.getSize();
+                        cachedContainerSize = { x: sz.x, y: sz.y };
+                        initRoadmapPath();
+                        initDocPath();
+                        initExcelPath();
+                        window.__appBooted = true;
+                    } catch (e) {
+                        console.error('初始化路径失败:', e);
+                        window.__appBooted = true;
+                    }
+                }, 200);
+
+            } catch (e) {
+                console.error('initMap 失败:', e);
+                const el = document.getElementById('bootError');
+                const msgEl = document.getElementById('bootErrorMsg');
+                if (el && msgEl) {
+                    msgEl.textContent = '地图初始化失败：' + e.message;
+                    el.classList.add('show');
+                }
+            }
+        }
+
+        function toggleWhiteBg() {
+            if (!tileLayer) {
+                alert('请先配置电子地图文件夹后再使用白底功能。');
+                return;
+            }
+            isWhiteBg = !isWhiteBg;
+            const wrapper = document.getElementById('map-wrapper');
+
+            if (isWhiteBg) {
+                if (tileLayer && map.hasLayer(tileLayer)) map.removeLayer(tileLayer);
+                map._container.style.background = '#ffffff';
+                wrapper.classList.add('cad-mode');
+                wrapper.classList.remove('highlight-mode');
+            } else {
+                map._container.style.background = '#f0f0f0';
+                if (tileLayer && !map.hasLayer(tileLayer)) tileLayer.addTo(map);
+                wrapper.classList.remove('cad-mode');
+                if (isHighlight) {
+                    wrapper.classList.add('highlight-mode');
+                }
+                removeCadDimensions();
+            }
+            updateCadDate();
+        }
+
+        function updateCadDate() {
+            const today = new Date();
+            document.getElementById('cadDate').textContent = '制图日期：' +
+                today.getFullYear() + '-' +
+                String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                String(today.getDate()).padStart(2, '0');
+        }
+
+        function positionCadFrameForScreen() {
+            const cadFrame = document.getElementById('cadFrame');
+            const vw = window.innerWidth;
+            const vh = window.innerHeight - 44;
+            const offsetTop = 44;
+            const MARGIN = 20;
+
+            const availW = vw - MARGIN * 2;
+            const availH = vh - MARGIN * 2;
+
+            let frameW, frameH;
+            if (availW / availH > A3_RATIO) {
+                frameH = availH;
+                frameW = frameH * A3_RATIO;
+            } else {
+                frameW = availW;
+                frameH = frameW / A3_RATIO;
+            }
+
+            const frameLeft = (vw - frameW) / 2;
+            const frameTop = offsetTop + (vh - frameH) / 2;
+
+            cadFrame.style.position = 'fixed';
+            cadFrame.style.top = frameTop + 'px';
+            cadFrame.style.left = frameLeft + 'px';
+            cadFrame.style.width = frameW + 'px';
+            cadFrame.style.height = frameH + 'px';
+            cadFrame.style.right = 'auto';
+            cadFrame.style.bottom = 'auto';
+            cadFrame.style.margin = '0';
+            cadFrame.style.transform = 'none';
+        }
+
+        function fitRoutesToFrame() {
+            const visibleIds = Object.keys(allRoutesData).filter(id => routeVisibility[id] === true);
+            const allPts = [];
+            visibleIds.forEach(routeId => {
+                const pts = allRoutesData[routeId].points;
+                if (pts && pts.length >= 2) {
+                    pts.forEach(p => allPts.push([p.lat, p.lng]));
+                }
+            });
+            if (allPts.length === 0) return;
+
+            map.invalidateSize({ animate: false, pan: false });
+
+            const PADDING_PX = 30;
+            map.fitBounds(L.latLngBounds(allPts), {
+                paddingTopLeft: [PADDING_PX, PADDING_PX],
+                paddingBottomRight: [PADDING_PX, PADDING_PX],
+                animate: false,
+                maxZoom: MAX_ZOOM
+            });
+        }
+
+        function expandAllVisibleNodes() {
+            removeAllNodes();
+            const visibleIds = Object.keys(allRoutesData).filter(id => routeVisibility[id] === true);
+            visibleIds.forEach(routeId => {
+                const routeData = allRoutesData[routeId];
+                if (!routeData || !routeData.points || routeData.points.length < 2) return;
+                const color = routeColorMap[routeId] || '#ff0000';
+                expandRouteNodes(routeId, routeData.points, false, color);
+            });
+        }
+
+        function clearMapLayers() {
+            if (routeClickTimer) { clearTimeout(routeClickTimer); routeClickTimer = null; }
+            if (endpointClickTimer) { clearTimeout(endpointClickTimer); endpointClickTimer = null; }
+
+            currentLayers.forEach(layer => {
+                if (map.hasLayer(layer)) map.removeLayer(layer);
+            });
+            currentLayers = [];
+            currentNodes = [];
+            currentEndpoints = [];
+            activeRouteIds.clear();
+            routeNodesMap.clear();
+            drawnNodeLabelKeys.clear();
+
+            // 【修改】兼容清理新旧两种类名的图例 DOM
+            const oldLegends = document.querySelectorAll('.legend, .legend-visible');
+            oldLegends.forEach(el => el.remove());
+        }
+
+        function drawMap() {
+            if (drawMapPending) return;
+            drawMapPending = true;
+            requestAnimationFrame(function() {
+                drawMapPending = false;
+                _drawMap();
+            });
+        }
+
+        function _drawMap() {
+            clearMapLayers();
+
+            if (showJifangOnly || showModuleOnly) {
+                drawSpecialNodes();
+                updateJifangCountDisplay();
+                updateModuleCountDisplay();
+                return;
+            }
+
+            drawRoutesAndNodes();
+
+            if (isWhiteBg) {
+                expandAllVisibleNodes();
+            }
+            updateJifangCountDisplay();
+            updateModuleCountDisplay();
+        }
+
+        // 【改进】生成稳定的线段 key（数值编码，减少字符串拼接开销）
+        function makeSegmentKey(p1, p2) {
+            // 用 lat/lng 各保留 6 位小数的整数拼接，比 toFixed 字符串拼接更快
+            const la1 = Math.round(p1.lat * 1e6);
+            const lo1 = Math.round(p1.lng * 1e6);
+            const la2 = Math.round(p2.lat * 1e6);
+            const lo2 = Math.round(p2.lng * 1e6);
+            // 按字典序排列两端点，保证无向性
+            if (la1 < la2 || (la1 === la2 && lo1 <= lo2)) {
+                return la1 + '_' + lo1 + '_' + la2 + '_' + lo2;
+            }
+            return la2 + '_' + lo2 + '_' + la1 + '_' + lo1;
+        }
+
+        function drawRoutesAndNodes() {
+            const visibleIds = Object.keys(allRoutesData).filter(id => routeVisibility[id] === true);
+            if (visibleIds.length === 0) {
+                updateTotalLengthDisplay();
+                return;
+            }
+
+            const routeInfos = [];
+            visibleIds.forEach(routeId => {
+                const routeData = allRoutesData[routeId];
+                const points = routeData.points;
+                const filename = routeData.filename || '';
+                if (points.length < 2) return;
+                routeInfos.push({ routeId, points, filename, color: routeColorMap[routeId] || '#ff0000' });
+            });
+            if (routeInfos.length === 0) {
+                updateTotalLengthDisplay();
+                return;
+            }
+
+            const segMap = new Map();
+            for (let ri = 0; ri < routeInfos.length; ri++) {
+                const info = routeInfos[ri];
+                const points = info.points;
+                for (let i = 0; i < points.length - 1; i++) {
+                    const p1 = points[i];
+                    const p2 = points[i + 1];
+                    const key = makeSegmentKey(p1, p2);
+
+                    let routeMap = segMap.get(key);
+                    if (!routeMap) {
+                        routeMap = new Map();
+                        segMap.set(key, routeMap);
+                    }
+                    if (!routeMap.has(info.routeId)) {
+                        routeMap.set(info.routeId, {
+                            routeId: info.routeId,
+                            color: info.color,
+                            p1: p1, p2: p2,
+                            filename: info.filename,
+                            points: info.points
+                        });
+                    }
+                }
+            }
+
+            const allLatLngs = [];
+            const endpointSet = new Set();
+            const drawnLengthLabelKeys = new Set();
+
+            segMap.forEach((routeMap, key) => {
+                const uniqueRoutes = [];
+                routeMap.forEach(v => uniqueRoutes.push(v));
+                uniqueRoutes.sort(function(a, b) {
+                    return a.routeId < b.routeId ? -1 : (a.routeId > b.routeId ? 1 : 0);
+                });
+
+                const n = uniqueRoutes.length;
+                const first = uniqueRoutes[0];
+                const p1 = first.p1;
+                const p2 = first.p2;
+
+                allLatLngs.push([p1.lat, p1.lng]);
+                allLatLngs.push([p2.lat, p2.lng]);
+
+                if (n === 1) {
+                    const polyline = L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], {
+                        color: first.color,
+                        weight: LINE_WIDTH,
+                        opacity: 0.9,
+                        renderer: canvasRenderer,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    }).addTo(map);
+                    currentLayers.push(polyline);
+
+                    polyline.on('click', function(e) {
+                        L.DomEvent.stopPropagation(e);
+                        if (routeClickTimer) clearTimeout(routeClickTimer);
+                        routeClickTimer = setTimeout(function() {
+                            toggleRouteNodes(first.routeId, first.points, 0, first.color);
+                            routeClickTimer = null;
+                        }, 250);
+                    });
+                    polyline.on('dblclick', function(e) {
+                        L.DomEvent.stopPropagation(e);
+                        if (routeClickTimer) { clearTimeout(routeClickTimer); routeClickTimer = null; }
+                        openDocument(first.filename);
+                    });
+                    polyline.on('mouseover', function() {
+                        this.setStyle({ weight: LINE_WIDTH + 4, opacity: 1.0 });
+                        this.bringToFront();
+                    });
+                    polyline.on('mouseout', function() {
+                        this.setStyle({ weight: LINE_WIDTH, opacity: 0.9 });
+                    });
+                } else {
+                    let totalWeight = (n === 2) ? LINE_WIDTH * 2 : LINE_WIDTH * 3;
+                    const SEG_COUNT = 10;
+                    for (let seg = 0; seg < SEG_COUNT; seg++) {
+                        const t1 = seg / SEG_COUNT;
+                        const t2 = (seg + 1) / SEG_COUNT;
+                        const lat1 = p1.lat + (p2.lat - p1.lat) * t1;
+                        const lng1 = p1.lng + (p2.lng - p1.lng) * t1;
+                        const lat2 = p1.lat + (p2.lat - p1.lat) * t2;
+                        const lng2 = p1.lng + (p2.lng - p1.lng) * t2;
+                        const color = uniqueRoutes[seg % n].color;
+                        const line = L.polyline([[lat1, lng1], [lat2, lng2]], {
+                            color: color,
+                            weight: totalWeight,
+                            opacity: 0.9,
+                            renderer: canvasRenderer,
+                            lineCap: 'butt'
+                        }).addTo(map);
+                        currentLayers.push(line);
+                    }
+                }
+
+                if (showLength && !drawnLengthLabelKeys.has(key)) {
+                    drawnLengthLabelKeys.add(key);
+                    const dist = calcDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+                    const distText = dist.toFixed(2) + ' km';
+                    const pt1 = map.latLngToContainerPoint([p1.lat, p1.lng]);
+                    const pt2 = map.latLngToContainerPoint([p2.lat, p2.lng]);
+                    const ddx = pt2.x - pt1.x;
+                    const ddy = pt2.y - pt1.y;
+                    const len = Math.sqrt(ddx * ddx + ddy * ddy);
+                    let nx = 0, ny = -1;
+                    if (len > 0.001) {
+                        nx = -ddy / len;
+                        ny = ddx / len;
+                        if (ny > 0) { nx = -nx; ny = -ny; }
+                    }
+                    const LEN_LABEL_OFFSET = 20;
+                    const midX = (pt1.x + pt2.x) / 2 + nx * LEN_LABEL_OFFSET;
+                    const midY = (pt1.y + pt2.y) / 2 + ny * LEN_LABEL_OFFSET;
+                    const labelLatLng = map.containerPointToLatLng([midX, midY]);
+                    const coloredHtml = '<span style="color:#0000ff;">' + distText + '</span>';
+                    const icon = L.divIcon({
+                        className: 'length-label-transparent',
+                        html: coloredHtml,
+                        iconSize: [100, 30],
+                        iconAnchor: [50, 15]
+                    });
+                    const marker = L.marker([labelLatLng.lat, labelLatLng.lng], { icon: icon, interactive: false });
+                    marker.addTo(map);
+                    currentLayers.push(marker);
+                }
+            });
+
+            if (!isWhiteBg && showEndpointLabels) {
+                routeInfos.forEach(info => {
+                    const pts = info.points;
+                    const firstPoint = pts[0];
+                    const lastPoint = pts[pts.length - 1];
+                    const secondPoint = pts[1];
+                    const secondLastPoint = pts[pts.length - 2];
+
+                    [firstPoint, lastPoint].forEach((point, endpointIdx) => {
+                        const key = point.lat.toFixed(6) + ',' + point.lng.toFixed(6);
+                        if (endpointSet.has(key)) return;
+                        endpointSet.add(key);
+
+                        point._refPoint = endpointIdx === 0 ? secondPoint : secondLastPoint;
+                        point._routeId = info.routeId;
+                        point._filename = info.filename;
+                        addEndpointLabel(point,'', info.color);
+                    });
+                });
+            }
+
+            if (allLatLngs.length > 0 && !isWhiteBg) {
+                map.fitBounds(L.latLngBounds(allLatLngs), { maxZoom: MAX_ZOOM });
+            }
+            updateTotalLengthDisplay();
+        }
+
+        function redrawLengthLabels() {
+            currentLayers = currentLayers.filter(layer => {
+                if (layer instanceof L.Marker && layer.options.icon &&
+                    layer.options.icon.options.className === 'length-label-transparent') {
+                    if (map.hasLayer(layer)) map.removeLayer(layer);
+                    return false;
+                }
+                return true;
+            });
+
+            const visibleIds = Object.keys(allRoutesData).filter(id => routeVisibility[id] === true);
+            const drawnLengthLabelKeys = new Set();
+
+            visibleIds.forEach(routeId => {
+                const routeData = allRoutesData[routeId];
+                const pts = routeData.points;
+                if (pts.length < 2) return;
+
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const p1 = pts[i];
+                    const p2 = pts[i+1];
+                    const dist = calcDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+                    const distText = dist.toFixed(2) + ' km';
+                    const segKey = makeSegmentKey(p1, p2);
+                    if (drawnLengthLabelKeys.has(segKey)) continue;
+                    drawnLengthLabelKeys.add(segKey);
+
+                    const pt1 = map.latLngToContainerPoint([p1.lat, p1.lng]);
+                    const pt2 = map.latLngToContainerPoint([p2.lat, p2.lng]);
+                    const dx = pt2.x - pt1.x;
+                    const dy = pt2.y - pt1.y;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    let nx = 0, ny = -1;
+                    if (len > 0.001) {
+                        nx = -dy / len;
+                        ny = dx / len;
+                        if (ny > 0) { nx = -nx; ny = -ny; }
+                    }
+                    const LEN_LABEL_OFFSET = 20;
+                    const midX = (pt1.x + pt2.x) / 2 + nx * LEN_LABEL_OFFSET;
+                    const midY = (pt1.y + pt2.y) / 2 + ny * LEN_LABEL_OFFSET;
+                    const labelLatLng = map.containerPointToLatLng([midX, midY]);
+
+                    const coloredHtml = '<span style="color:#0000ff;">' + distText + '</span>';
+                    const icon = L.divIcon({
+                        className: 'length-label-transparent',
+                        html: coloredHtml,
+                        iconSize: [100, 30],
+                        iconAnchor: [50, 15]
+                    });
+                    const marker = L.marker([labelLatLng.lat, labelLatLng.lng], { icon: icon, interactive: false });
+                    marker.addTo(map);
+                    currentLayers.push(marker);
+                }
+            });
+        }
+
+        // 【修复】修正变量名拼写错误：nodaddeLat -> nodeLat
+        function getEndpointLabelDirection(nodeLat, nodeLng, refLat, refLng) {
+            const dLat = refLat - nodeLat;
+            const dLng = refLng - nodeLng;
+            const cosLat = Math.cos(nodeLat * Math.PI / 180);
+            const absLat = Math.abs(dLat);
+            const absLng = Math.abs(dLng) * cosLat;
+            if (absLat >= absLng) {
+                return dLat > 0 ? 'below' : 'above';
+            } else {
+                return dLng > 0 ? 'left' : 'right';
+            }
+        }
+
+        function getAnchorByDirection(dir, labelWidth, labelHeight) {
+            const GAP = 6;
+            switch (dir) {
+                case 'below': return [labelWidth / 2, -GAP];
+                case 'above': return [labelWidth / 2, labelHeight + GAP];
+                case 'right': return [-GAP, labelHeight / 2];
+                case 'left':  return [labelWidth + GAP, labelHeight / 2];
+                default:      return [labelWidth / 2, labelHeight + GAP];
+            }
+        }
+
+        function addEndpointLabel(point, prefix, lineColor) {
+            const invisibleIcon = L.divIcon({
+                className: 'invisible-marker',
+                iconSize: [1, 1],
+                iconAnchor: [0, 0]
+            });
+            const marker = L.marker([point.lat, point.lng], { icon: invisibleIcon, interactive: false });
+            marker.addTo(map);
+            currentLayers.push(marker);
+
+            let dir = 'above';
+            if (point._refPoint) {
+                dir = getEndpointLabelDirection(
+                    point.lat, point.lng,
+                    point._refPoint.lat, point._refPoint.lng
+                );
+            }
+
+            const LABEL_HEIGHT = 34;
+
+            let labelIcon;
+            if (isWhiteBg) {
+                const labelText = prefix + (point.name || '未命名');
+                const labelWidth = estimateLabelWidth(labelText, 14);
+                const anchor = getAnchorByDirection(dir, labelWidth, LABEL_HEIGHT);
+                labelIcon = L.divIcon({
+                    className: 'endpoint-label',
+                    html: '<span style="color:' + lineColor + ';">' + labelText + '</span>',
+                    iconSize: [labelWidth, LABEL_HEIGHT],
+                    iconAnchor: anchor
+                });
+            } else {
+                const isJifang = point.name && point.name.indexOf('机房') !== -1;
+                const isModule = point.name && point.name.indexOf('模块局') !== -1;
+                let iconHtml = '';
+                let extraClass = 'endpoint-label-red';
+                if (isJifang) {
+                    iconHtml = '<span class="star">⭐</span> ';
+                    extraClass = 'endpoint-label-red';
+                } else if (isModule) {
+                    iconHtml = '<span class="triangle">▲</span> ';
+                    extraClass = 'endpoint-label-module';
+                }
+                const labelText = prefix + (point.name || '未命名');
+                const labelWidth = estimateLabelWidth(labelText, 14) + (iconHtml ? 18 : 0);
+                const anchor = getAnchorByDirection(dir, labelWidth, LABEL_HEIGHT);
+                labelIcon = L.divIcon({
+                    className: extraClass,
+                    html: prefix + iconHtml + (point.name || '未命名'),
+                    iconSize: [labelWidth, LABEL_HEIGHT],
+                    iconAnchor: anchor
+                });
+            }
+
+            const labelMarker = L.marker([point.lat, point.lng], { icon: labelIcon, interactive: true });
+            labelMarker.addTo(map);
+            currentLayers.push(labelMarker);
+            currentEndpoints.push(labelMarker);
+
+            labelMarker.on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                if (endpointClickTimer) clearTimeout(endpointClickTimer);
+                endpointClickTimer = setTimeout(function() {
+                    L.popup()
+                        .setLatLng([point.lat, point.lng])
+                        .setContent(
+                            '<b>' + (point.name || '未命名') + '</b><br>' +
+                            '光缆名称: ' + (point._routeId || '') + '<br>' +
+                            '经纬度: （' + point.lng + '，' + point.lat + '）<br>' +
+                            '说明: ' + (point.desc || '无') + '<br>'
+                        )
+                        .openOn(map);
+                    endpointClickTimer = null;
+                }, 250);
+            });
+            labelMarker.on('dblclick', function(e) {
+                L.DomEvent.stopPropagation(e);
+                if (endpointClickTimer) { clearTimeout(endpointClickTimer); endpointClickTimer = null; }
+                map.closePopup();
+                openDocument(point._filename);
+            });
+        }
+
+        function drawCadDimensions() {
+            removeCadDimensions();
+
+            const visibleIds = Object.keys(allRoutesData).filter(id => routeVisibility[id] === true);
+            const LABEL_OFFSET_PX = 20;
+            const drawnCadKeys = new Set();
+
+            visibleIds.forEach(routeId => {
+                const routeData = allRoutesData[routeId];
+                const pts = routeData.points;
+                if (pts.length < 2) return;
+
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const p1 = pts[i];
+                    const p2 = pts[i + 1];
+                    const dist = calcDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+                    const distText = dist.toFixed(2) + ' km';
+
+                    const segKey = makeSegmentKey(p1, p2);
+                    if (drawnCadKeys.has(segKey)) continue;
+                    drawnCadKeys.add(segKey);
+
+                    const pt1 = map.latLngToContainerPoint([p1.lat, p1.lng]);
+                    const pt2 = map.latLngToContainerPoint([p2.lat, p2.lng]);
+
+                    const dx = pt2.x - pt1.x;
+                    const dy = pt2.y - pt1.y;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    if (len < 1) continue;
+
+                    let nx = -dy / len;
+                    let ny = dx / len;
+                    if (ny > 0) { nx = -nx; ny = -ny; }
+
+                    const midX = (pt1.x + pt2.x) / 2 + nx * LABEL_OFFSET_PX;
+                    const midY = (pt1.y + pt2.y) / 2 + ny * LABEL_OFFSET_PX;
+                    const textLatLng = map.containerPointToLatLng([midX, midY]);
+
+                    const html = '<div style="color:#0000ff;font-size:15px;font-weight:bold;' +
+                        'font-family:\'SimSun\',\'宋体\',serif;background:transparent;padding:1px 3px;' +
+                        'line-height:1;white-space:nowrap;border:none;display:inline-block;">' +
+                        distText + '</div>';
+                    const icon = L.divIcon({
+                        className: 'cad-dimension',
+                        html: html,
+                        iconSize: [80, 20],
+                        iconAnchor: [40, 10]
+                    });
+                    const marker = L.marker([textLatLng.lat, textLatLng.lng], { icon: icon, interactive: false });
+                    marker.addTo(map);
+                    currentLayers.push(marker);
+                }
+            });
+        }
+
+        function removeCadDimensions() {
+            currentLayers = currentLayers.filter(layer => {
+                if (layer instanceof L.Marker && layer.options.icon) {
+                    const cls = layer.options.icon.options.className;
+                    if (cls === 'cad-dimension' || cls === 'length-label-transparent') {
+                        if (map.hasLayer(layer)) map.removeLayer(layer);
+                        return false;
+                    }
+                }
+                return true;
+            });
+        }
+
+        function toggleRouteNodes(routeId, points, offset, color) {
+            if (activeRouteIds.has(routeId)) {
+                removeRouteNodes(routeId);
+                return;
+            }
+            expandRouteNodes(routeId, points, true, color);
+        }
+
+        function expandRouteNodes(routeId, points, excludeEndpoints, color) {
+            const nodeSet = new Set();
+            const allMarkers = [];
+            const startIdx = excludeEndpoints ? 1 : 0;
+            const endIdx = excludeEndpoints ? points.length - 1 : points.length;
+
+            for (let idx = startIdx; idx < endIdx; idx++) {
+                const point = points[idx];
+                const key = point.lat.toFixed(6) + ',' + point.lng.toFixed(6);
+                if (!nodeSet.has(key)) {
+                    nodeSet.add(key);
+                    const markers = addNodeMarker(point, routeId, idx, points.length, color, points);
+                    if (markers && markers.length) {
+                        for (let m = 0; m < markers.length; m++) allMarkers.push(markers[m]);
+                    }
+                }
+            }
+            routeNodesMap.set(routeId, allMarkers);
+            activeRouteIds.add(routeId);
+        }
+
+        function removeRouteNodes(routeId) {
+            const markers = routeNodesMap.get(routeId) || [];
+            markers.forEach(node => {
+                if (map.hasLayer(node)) map.removeLayer(node);
+            });
+            currentNodes = currentNodes.filter(n => !markers.includes(n));
+            currentLayers = currentLayers.filter(n => !markers.includes(n));
+            routeNodesMap.delete(routeId);
+            activeRouteIds.delete(routeId);
+        }
+
+        function removeAllNodes() {
+            routeNodesMap.forEach(markers => {
+                markers.forEach(node => {
+                    if (map.hasLayer(node)) map.removeLayer(node);
+                });
+            });
+            routeNodesMap.clear();
+            activeRouteIds.clear();
+            currentNodes = [];
+            drawnNodeLabelKeys.clear();
+        }
+
+        function drawSpecialNodes() {
+            const specialNodes = [];
+            const seen = new Set();
+
+            Object.keys(allRoutesData).forEach(routeId => {
+                const points = allRoutesData[routeId].points;
+                for (let i = 0; i < points.length; i++) {
+                    const p = points[i];
+                    if (!p.name) continue;
+                    const key = p.lat.toFixed(6) + ',' + p.lng.toFixed(6);
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+
+                    const isJifang = p.name.indexOf('机房') !== -1;
+                    const isModule = p.name.indexOf('模块局') !== -1;
+                    let type = null;
+                    if (showJifangOnly && showModuleOnly) {
+                        if (isJifang) type = 'jifang';
+                        else if (isModule) type = 'module';
+                    } else if (showJifangOnly && isJifang) {
+                        type = 'jifang';
+                    } else if (showModuleOnly && isModule) {
+                        type = 'module';
+                    }
+                    if (type) {
+                        specialNodes.push({ point: p, type: type });
+                    }
+                }
+            });
+
+            if (specialNodes.length === 0) {
+                const kw = [];
+                if (showJifangOnly) kw.push('机房');
+                if (showModuleOnly) kw.push('模块局');
+                L.popup()
+                    .setLatLng(map.getCenter())
+                    .setContent('没有找到包含“' + kw.join('”或“') + '”的节点')
+                    .openOn(map);
+                updateTotalLengthDisplay();
+                return;
+            }
+
+            const latLngs = specialNodes.map(item => [item.point.lat, item.point.lng]);
+            map.fitBounds(L.latLngBounds(latLngs), { maxZoom: MAX_ZOOM });
+
+            specialNodes.forEach(({ point, type }) => {
+                const invisibleIcon = L.divIcon({
+                    className: 'invisible-marker',
+                    iconSize: [50, 50],
+                    iconAnchor: [25, 25],
+                    popupAnchor: [0, -25]
+                });
+                const marker = L.marker([point.lat, point.lng], { icon: invisibleIcon });
+                marker.addTo(map);
+                currentLayers.push(marker);
+
+                let prefixHtml, labelClass;
+                if (type === 'jifang') {
+                    prefixHtml = '<span class="star">⭐</span> ';
+                    labelClass = 'custom-label-red';
+                } else {
+                    prefixHtml = '<span class="triangle">▲</span> ';
+                    labelClass = 'custom-label-module';
+                }
+
+                const displayName = prefixHtml + point.name;
+                marker.bindTooltip(displayName, {
+                    direction: 'top',
+                    offset: [0, -48],
+                    permanent: true,
+                    className: labelClass,
+                    interactive: true
+                });
+
+                marker.bindPopup(
+                    '<b>' + point.name + '</b><br>' +
+                    '经纬度: （' + point.lng + '，' + point.lat + ' ）<br>' +
+                    '说明: ' + (point.desc || '无')
+                );
+            });
+
+            updateTotalLengthDisplay();
+        }
+
+        function addNodeMarker(point, routeId, idx, totalPoints, lineColor, points) {
+            const nodeKey = point.lat.toFixed(6) + ',' + point.lng.toFixed(6);
+            if (drawnNodeLabelKeys.has(nodeKey)) return null;
+            drawnNodeLabelKeys.add(nodeKey);
+
+            const invisibleIcon = L.divIcon({
+                className: 'invisible-marker',
+                iconSize: [1, 1],
+                iconAnchor: [0, 0]
+            });
+            const marker = L.marker([point.lat, point.lng], { icon: invisibleIcon, interactive: false });
+            marker.addTo(map);
+            currentNodes.push(marker);
+
+            const isJifang = point.name && point.name.indexOf('机房') !== -1;
+            const isModule = point.name && point.name.indexOf('模块局') !== -1;
+
+            let labelHtml, labelClass;
+            if (isWhiteBg) {
+                labelHtml = '<span style="color:' + lineColor + ';">' + (point.name || '未命名') + '</span>';
+                labelClass = 'custom-label';
+            } else {
+                let iconHtml = '';
+                labelClass = 'custom-label';
+                if (isJifang) {
+                    iconHtml = '<span class="star">⭐</span>';
+                    labelClass = 'custom-label-red';
+                } else if (isModule) {
+                    iconHtml = '<span class="triangle">▲</span>';
+                    labelClass = 'custom-label-module';
+                }
+                labelHtml = iconHtml + (point.name || '未命名');
+            }
+
+            const placement = computeMidNodeLabelPlacement(point, points, idx, point.name || '未命名', MID_LABEL_FONT_SIZE);
+
+            let labelW = placement.labelW;
+            if (!isWhiteBg && (isJifang || isModule)) {
+                labelW += 18;
+            }
+            const labelH = placement.labelH;
+
+            const anchorX = labelW / 2 - placement.offsetX;
+            const anchorY = labelH / 2 - placement.offsetY;
+
+            const labelIcon = L.divIcon({
+                className: labelClass,
+                html: labelHtml,
+                iconSize: [labelW, labelH],
+                iconAnchor: [anchorX, anchorY]
+            });
+
+            const labelMarker = L.marker([point.lat, point.lng], { icon: labelIcon, interactive: true });
+            labelMarker.addTo(map);
+            currentLayers.push(labelMarker);
+            currentNodes.push(labelMarker);
+
+            labelMarker.on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                L.popup()
+                    .setLatLng([point.lat, point.lng])
+                    .setContent(
+                        '<b>' + (point.name || '未命名') + '</b><br>' +
+                        '光缆名称: ' + routeId + '<br>' +
+                        '经纬度: （' + point.lng + '，' + point.lat + '）<br>' +
+                        '说明: ' + (point.desc || '无') + '<br>'
+                    )
+                    .openOn(map);
+            });
+
+            return [marker, labelMarker];
+        }
+
+        function updateTotalLengthDisplay() {
+            const display = document.getElementById('totalLengthDisplay');
+            if (!showTotalLength) {
+                display.style.display = 'none';
+                return;
+            }
+            const visibleIds = Object.keys(allRoutesData).filter(id => routeVisibility[id] === true);
+            let totalDist = 0;
+            visibleIds.forEach(routeId => {
+                const points = allRoutesData[routeId].points;
+                for (let i = 0; i < points.length - 1; i++) {
+                    totalDist += calcDistance(points[i].lat, points[i].lng, points[i+1].lat, points[i+1].lng);
+                }
+            });
+            display.textContent = '图上光缆总长为：' + (totalDist > 0 ? totalDist.toFixed(2) : '0.00') + ' km';
+            display.style.display = 'block';
+        }
+
+        function updateJifangCountDisplay() {
+            const display = document.getElementById('jifangCountDisplay');
+            if (!showJifangOnly) {
+                display.style.display = 'none';
+                return;
+            }
+            const seen = new Set();
+            Object.keys(allRoutesData).forEach(routeId => {
+                allRoutesData[routeId].points.forEach(p => {
+                    if (p.name && p.name.indexOf('机房') !== -1) {
+                        seen.add(p.lat.toFixed(6) + ',' + p.lng.toFixed(6));
+                    }
+                });
+            });
+            display.textContent = '机房总数为：' + seen.size + ' 个';
+            display.style.display = 'block';
+        }
+
+        function updateModuleCountDisplay() {
+            const display = document.getElementById('moduleCountDisplay');
+            if (!showModuleOnly) {
+                display.style.display = 'none';
+                return;
+            }
+            const seen = new Set();
+            Object.keys(allRoutesData).forEach(routeId => {
+                allRoutesData[routeId].points.forEach(p => {
+                    if (p.name && p.name.indexOf('模块局') !== -1) {
+                        seen.add(p.lat.toFixed(6) + ',' + p.lng.toFixed(6));
+                    }
+                });
+            });
+            display.textContent = '模块局总数为：' + seen.size + ' 个';
+            display.style.display = 'block';
+        }
+
+        function updateSelectAllState() {
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            if (!selectAllCheckbox) return;
+            const visibleIds = [];
+            const items = document.querySelectorAll('#routeControls .route-control-item:not(.select-all-item)');
+            items.forEach(item => {
+                if (item.style.display === 'none') return;
+                const id = item.dataset.routeId;
+                if (id) visibleIds.push(id);
+            });
+            if (visibleIds.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+                return;
+            }
+            const allChecked = visibleIds.every(id => routeVisibility[id] === true);
+            const anyChecked = visibleIds.some(id => routeVisibility[id] === true);
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = !allChecked && anyChecked;
+        }
+
+        function generateRouteControls() {
+            const container = document.getElementById('routeControls');
+            container.innerHTML = '';
+            const ids = Object.keys(allRoutesData).sort();
+            if (ids.length === 0) {
+                container.innerHTML = '<div style="color:#999;padding:4px 0;">无数据</div>';
+                return;
+            }
+            const palette = [
+                '#e6194b','#3cb44b','#4363d8','#f58231','#911eb4',
+                '#00bcd4','#f032e6','#008080','#800000','#000075',
+                '#808000','#9a6324','#000000','#e91e63','#3f51b5',
+                '#009688','#ff5722','#673ab7','#607d8b','#ff1493'
+            ];
+            const selectAllDiv = document.createElement('div');
+            selectAllDiv.className = 'route-control-item select-all-item';
+            const selectAllCheckbox = document.createElement('input');
+            selectAllCheckbox.type = 'checkbox';
+            selectAllCheckbox.id = 'selectAllCheckbox';
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.addEventListener('change', function() {
+                const checked = this.checked;
+                const visibleItems = document.querySelectorAll('#routeControls .route-control-item:not(.select-all-item)');
+                const visibleIdSet = new Set();
+                visibleItems.forEach(item => {
+                    if (item.style.display === 'none') return;
+                    const id = item.dataset.routeId;
+                    if (id) visibleIdSet.add(id);
+                });
+                if (checked) {
+                    Object.keys(allRoutesData).forEach(id => {
+                        routeVisibility[id] = visibleIdSet.has(id);
+                    });
+                } else {
+                    Object.keys(allRoutesData).forEach(id => {
+                        routeVisibility[id] = false;
+                    });
+                }
+                visibleItems.forEach(item => {
+                    const id = item.dataset.routeId;
+                    const cb = item.querySelector('.route-checkbox');
+                    if (cb && id) cb.checked = routeVisibility[id];
+                });
+                this.indeterminate = false;
+                drawMap();
+            });
+            const selectAllLabel = document.createElement('label');
+            selectAllLabel.textContent = '全选';
+            selectAllLabel.style.fontWeight = 'bold';
+            const placeholder = document.createElement('span');
+            placeholder.style.width = '20px';
+            selectAllDiv.appendChild(selectAllCheckbox);
+            selectAllDiv.appendChild(placeholder);
+            selectAllDiv.appendChild(selectAllLabel);
+            container.appendChild(selectAllDiv);
+
+            ids.forEach((id, index) => {
+                if (!routeColorMap[id]) routeColorMap[id] = palette[index % palette.length];
+                if (routeVisibility[id] === undefined) routeVisibility[id] = false;
+                const div = document.createElement('div');
+                div.className = 'route-control-item';
+                div.dataset.routeId = id;
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'route-checkbox';
+                checkbox.checked = routeVisibility[id];
+                checkbox.addEventListener('change', function() {
+                    routeVisibility[id] = this.checked;
+                    updateSelectAllState();
+                    drawMap();
+                });
+                const colorPicker = document.createElement('input');
+                colorPicker.type = 'color';
+                colorPicker.value = routeColorMap[id];
+                colorPicker.addEventListener('input', function() {
+                    routeColorMap[id] = this.value;
+                    drawMap();
+                });
+                const label = document.createElement('label');
+                label.textContent = id;
+                div.appendChild(checkbox);
+                div.appendChild(colorPicker);
+                div.appendChild(label);
+                container.appendChild(div);
+            });
+            updateSelectAllState();
+        }
+
+        function filterRouteControls(keyword) {
+            const items = document.querySelectorAll('#routeControls .route-control-item');
+            const kw = keyword.trim().toLowerCase();
+            items.forEach(item => {
+                if (item.classList.contains('select-all-item')) return;
+                const id = item.dataset.routeId || '';
+                const rowText = (allRoutesData[id] && allRoutesData[id].rowText) || '';
+                const matched = kw === '' || rowText.indexOf(kw) !== -1;
+                item.style.display = matched ? 'flex' : 'none';
+            });
+            updateSelectAllState();
+        }
+
+        function processExcelArrayBuffer(arrayBuffer) {
+            try {
+                if (typeof XLSX === 'undefined') {
+                    alert('XLSX 库未加载，无法解析 Excel 文件。请检查 libs 文件夹。');
+                    return;
+                }
+
+                const data = new Uint8Array(arrayBuffer);
+                const workbook = XLSX.read(data, {
+                    type: 'array',
+                    dense: true,
+                    cellDates: false,
+                    cellNF: false,
+                    cellText: false,
+                    sheetStubs: false,
+                    raw: true
+                });
+
+                const sheetNames = workbook.SheetNames;
+                if (sheetNames.indexOf(ROUTE_SHEET_NAME) === -1 || sheetNames.indexOf(NODE_SHEET_NAME) === -1) {
+                    alert('工作簿必须包含“' + ROUTE_SHEET_NAME + '”和“' + NODE_SHEET_NAME + '”两个表');
+                    return;
+                }
+
+                const nodeSheet = workbook.Sheets[NODE_SHEET_NAME];
+                const nodeData = nodeSheet['!data'] || [];
+                const nodeRange = XLSX.utils.decode_range(nodeSheet['!ref'] || 'A1:E1');
+                const nodeMap = new Map();
+
+                let nodeStartRow = nodeRange.s.r;
+                if (nodeData[nodeStartRow]) {
+                    const firstRow = nodeData[nodeStartRow];
+                    const firstCell = firstRow[0] ? String(firstRow[0].v || '') : '';
+                    let headerText = '';
+                    for (let c = 0; c < firstRow.length; c++) {
+                        if (c > 0) headerText += ' ';
+                        headerText += firstRow[c] ? String(firstRow[c].v || '') : '';
+                    }
+                    if (/管井编号|管井名称|纬度|经度|重要信息/i.test(firstCell) ||
+                        /管井编号|管井名称|lat|lng|说明/i.test(headerText)) {
+                        nodeStartRow = nodeRange.s.r + 1;
+                    }
+                }
+
+                for (let r = nodeStartRow; r <= nodeRange.e.r; r++) {
+                    const row = nodeData[r];
+                    if (!row) continue;
+                    const nameCell = row[NODE_NAME_IDX];
+                    const name = nameCell ? String(nameCell.v || '').trim() : '';
+                    if (name === '') continue;
+                    const lngCell = row[NODE_LNG_IDX];
+                    const latCell = row[NODE_LAT_IDX];
+                    const lng = lngCell ? parseFloat(lngCell.v) : NaN;
+                    const lat = latCell ? parseFloat(latCell.v) : NaN;
+                    if (isNaN(lat) || isNaN(lng)) continue;
+                    const descCell = row[NODE_DESC_IDX];
+                    const desc = descCell ? String(descCell.v || '').trim() : '';
+                    nodeMap.set(name, { lat: lat, lng: lng, desc: desc });
+                }
+
+                if (nodeMap.size === 0) {
+                    alert('节点表无有效数据');
+                    return;
+                }
+
+                const routeSheet = workbook.Sheets[ROUTE_SHEET_NAME];
+                const routeData = routeSheet['!data'] || [];
+                const routeRange = XLSX.utils.decode_range(routeSheet['!ref'] || 'A1:A1');
+
+                allRoutesData = {};
+                routeColorMap = {};
+                routeVisibility = {};
+
+                let routeStartRow = routeRange.s.r;
+                if (routeData[routeStartRow]) {
+                    const firstRow = routeData[routeStartRow];
+                    const firstCell = firstRow[0] ? String(firstRow[0].v || '') : '';
+                    if (/光缆|名称|文件名/i.test(firstCell)) {
+                        routeStartRow = routeRange.s.r + 1;
+                    }
+                }
+
+                for (let r = routeStartRow; r <= routeRange.e.r; r++) {
+                    const row = routeData[r];
+                    if (!row) continue;
+                    const nameCell = row[0];
+                    const cableName = nameCell ? String(nameCell.v || '').trim() : '';
+                    if (cableName === '') continue;
+                    const fileCell = row[1];
+                    const filename = fileCell ? String(fileCell.v || '').trim() : '';
+
+                    const points = [];
+                    for (let c = 2; c <= routeRange.e.c; c++) {
+                        const cell = row[c];
+                        const nodeName = cell ? String(cell.v || '').trim() : '';
+                        if (nodeName === '') continue;
+                        const node = nodeMap.get(nodeName);
+                        if (node) {
+                            points.push({ lat: node.lat, lng: node.lng, name: nodeName, desc: node.desc });
+                        } else {
+                            console.warn('节点“' + nodeName + '”在节点表中不存在');
+                        }
+                    }
+
+                    if (points.length >= 2) {
+                        let rowText = '';
+                        for (let c = 0; c <= routeRange.e.c; c++) {
+                            const cell = row[c];
+                            if (c > 0) rowText += ' ';
+                            rowText += cell ? String(cell.v || '') : '';
+                        }
+                        allRoutesData[cableName] = {
+                            points: points,
+                            filename: filename,
+                            rowText: rowText.toLowerCase()
+                        };
+                    }
+                }
+
+                if (Object.keys(allRoutesData).length === 0) {
+                    alert('未找到任何有效光缆（每条至少2个有效节点）');
+                    return;
+                }
+
+                showJifangOnly = false;
+                showModuleOnly = false;
+                showLength = false;
+                showTotalLength = false;
+                isWhiteBg = false;
+                showEndpointLabels = true;
+                isHighlight = false;
+                activeRouteIds.clear();
+                routeNodesMap.clear();
+                drawnNodeLabelKeys.clear();
+                midLabelPlacementCache.clear();
+                map.setMaxZoom(MAX_ZOOM);
+                document.getElementById('map-wrapper').classList.remove('cad-mode');
+                document.getElementById('map-wrapper').classList.remove('highlight-mode');
+                document.getElementById('cadFrame').style.display = 'none';
+                document.getElementById('cadTitleBlock').style.display = 'none';
+                document.getElementById('jifangBtn').classList.remove('active');
+                document.getElementById('moduleBtn').classList.remove('active');
+                document.getElementById('lengthBtn').classList.remove('active');
+                document.getElementById('totalLengthBtn').classList.remove('active');
+                document.getElementById('whiteBgBtn').classList.remove('active');
+                document.getElementById('labelToggleBtn').classList.remove('active');
+                document.getElementById('highlightBtn').classList.remove('active');
+                document.getElementById('totalLengthDisplay').style.display = 'none';
+                document.getElementById('jifangCountDisplay').style.display = 'none';
+                document.getElementById('moduleCountDisplay').style.display = 'none';
+                if (tileLayer && !map.hasLayer(tileLayer)) {
+                    tileLayer.addTo(map);
+                    map._container.style.background = '#f0f0f0';
+                }
+                updateCadDate();
+
+                generateRouteControls();
+                drawMap();
+                document.getElementById('dropdownContent').classList.add('show');
+
+            } catch (err) {
+                alert('解析出错：' + err.message);
+                console.error('Excel 解析失败:', err);
+            }
+        }
+
+        function onSelectFileClick() {
+            if (currentExcelPath) {
+                showPathConfigDialog('excel', '当前数据文件：' + currentExcelPath + '\n如需更换，请重新选择。');
+            } else {
+                showPathConfigDialog('excel', '请选择光缆数据文件（Excel）。');
+            }
+        }
+
+        // ==================== 事件绑定 ====================
+        function bindUIEvents() {
+            const trigger = document.getElementById('dropdownTrigger');
+            const content = document.getElementById('dropdownContent');
+            if (trigger && content) {
+                trigger.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    content.classList.toggle('show');
+                    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+                });
+                trigger.addEventListener('mouseleave', function() {
+                    if (content.classList.contains('show')) {
+                        closeTimer = setTimeout(function() {
+                            content.classList.remove('show');
+                            closeTimer = null;
+                        }, 300);
+                    }
+                });
+                trigger.addEventListener('mouseenter', function() {
+                    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+                });
+                content.addEventListener('click', function(e) { e.stopPropagation(); });
+            }
+
+            const searchBox = document.getElementById('searchBox');
+            if (searchBox) {
+                searchBox.addEventListener('input', function() {
+                    filterRouteControls(this.value);
+                });
+            }
+
+            const labelToggleBtn = document.getElementById('labelToggleBtn');
+            if (labelToggleBtn) {
+                labelToggleBtn.addEventListener('click', function() {
+                    showEndpointLabels = !showEndpointLabels;
+                    this.classList.toggle('active', !showEndpointLabels);
+                    drawMap();
+                });
+            }
+
+            const highlightBtn = document.getElementById('highlightBtn');
+            if (highlightBtn) {
+                highlightBtn.addEventListener('click', function() {
+                    isHighlight = !isHighlight;
+                    this.classList.toggle('active', isHighlight);
+                    const wrapper = document.getElementById('map-wrapper');
+                    wrapper.classList.toggle('highlight-mode', isHighlight);
+                });
+            }
+
+            const docPreviewClose = document.getElementById('docPreviewClose');
+            if (docPreviewClose) {
+                docPreviewClose.addEventListener('click', function() {
+                    document.getElementById('docPreviewOverlay').classList.remove('show');
+                    document.getElementById('docPreviewContent').innerHTML = '';
+                });
+            }
+
+            const mapPathBtn = document.getElementById('mapPathBtn');
+            if (mapPathBtn) {
+                mapPathBtn.addEventListener('click', function() {
+                    showPathConfigDialog('map', '重新配置电子地图文件夹：');
+                });
+            }
+            const docPathBtn = document.getElementById('docPathBtn');
+            if (docPathBtn) {
+                docPathBtn.addEventListener('click', function() {
+                    showPathConfigDialog('doc', '重新配置文档存储文件夹：');
+                });
+            }
+
+            const selectFileBtn = document.getElementById('selectFileBtn');
+            if (selectFileBtn) {
+                selectFileBtn.addEventListener('click', onSelectFileClick);
+            }
+
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', async function(e) {
+                    const file = e.target.files[0];
+                    this.value = '';
+                    if (!file) return;
+
+                    const cfg = await loadConfig();
+                    cfg.excelPath = file.name;
+                    await saveConfig(cfg);
+                    currentExcelPath = file.name;
+
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        processExcelArrayBuffer(ev.target.result);
+                        hidePathConfigDialog();
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            const printBtn = document.getElementById('printBtn');
+            if (printBtn) {
+                printBtn.addEventListener('click', function() {
+                    try {
+                        if (isPrinting) return;
+                        isPrinting = true;
+                        doPrint();
+                    } catch (e) {
+                        isPrinting = false;
+                        alert('打印失败：' + e.message);
+                        console.error('打印失败:', e);
+                    }
+                });
+            }
+
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function() {
+                    removeAllNodes();
+                    clearMapLayers();
+                    map.closePopup();
+                    document.querySelectorAll('.leaflet-tooltip').forEach(el => el.remove());
+                    drawMap();
+                    if (isWhiteBg) {
+                        setTimeout(function() {
+                            map.invalidateSize({ animate: false, pan: false });
+                            requestAnimationFrame(function() {
+                                fitRoutesToFrame();
+                            });
+                        }, 100);
+                    }
+                });
+            }
+
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            if (fullscreenBtn) {
+                fullscreenBtn.addEventListener('click', function() {
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen().catch(err => {
+                            alert('全屏请求被拒绝：' + err.message);
+                        });
+                    } else {
+                        if (document.exitFullscreen) {
+                            document.exitFullscreen();
+                        }
+                    }
+                });
+                document.addEventListener('fullscreenchange', function() {
+                    fullscreenBtn.textContent = document.fullscreenElement ? '⛶ 退出' : '⛶ 全屏';
+                    setTimeout(function() {
+                        map.invalidateSize({ animate: false, pan: false });
+                    }, 200);
+                });
+            }
+
+            const jifangBtn = document.getElementById('jifangBtn');
+            if (jifangBtn) {
+                jifangBtn.addEventListener('click', function() {
+                    showJifangOnly = !showJifangOnly;
+                    this.classList.toggle('active');
+                    drawMap();
+                    updateJifangCountDisplay();
+                });
+            }
+
+            const moduleBtn = document.getElementById('moduleBtn');
+            if (moduleBtn) {
+                moduleBtn.addEventListener('click', function() {
+                    showModuleOnly = !showModuleOnly;
+                    this.classList.toggle('active');
+                    drawMap();
+                    updateModuleCountDisplay();
+                });
+            }
+
+            const lengthBtn = document.getElementById('lengthBtn');
+            if (lengthBtn) {
+                lengthBtn.addEventListener('click', function() {
+                    showLength = !showLength;
+                    this.classList.toggle('active');
+                    drawMap();
+                });
+            }
+
+            const totalLengthBtn = document.getElementById('totalLengthBtn');
+            if (totalLengthBtn) {
+                totalLengthBtn.addEventListener('click', function() {
+                    showTotalLength = !showTotalLength;
+                    this.classList.toggle('active');
+                    updateTotalLengthDisplay();
+                });
+            }
+
+            const whiteBgBtn = document.getElementById('whiteBgBtn');
+            if (whiteBgBtn) {
+                whiteBgBtn.addEventListener('click', function() {
+                    this.classList.toggle('active');
+                    toggleWhiteBg();
+                });
+            }
+
+            window.addEventListener('beforeprint', function() {
+                if (isWhiteBg) {
+                    map.invalidateSize({ animate: false, pan: false });
+                }
+            });
+        }
+
+        // ==================== 打印 ====================
+        // 【改进】用 Promise 链 + map 事件替代固定延时，提高时序健壮性
+        function doPrint() {
+            const wasFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+            const visibleIds = Object.keys(allRoutesData).filter(id => routeVisibility[id] === true);
+            const allPts = [];
+            visibleIds.forEach(routeId => {
+                const pts = allRoutesData[routeId].points;
+                if (pts && pts.length >= 2) {
+                    pts.forEach(p => allPts.push([p.lat, p.lng]));
+                }
+            });
+
+            const mapEl = document.getElementById('map');
+            const cadFrame = document.getElementById('cadFrame');
+            const cadTitleBlock = document.getElementById('cadTitleBlock');
+            const wrapper = document.getElementById('map-wrapper');
+
+            const savedWrapperHeight = wrapper.style.height;
+            const savedMapStyle = {
+                position: mapEl.style.position, top: mapEl.style.top, left: mapEl.style.left,
+                width: mapEl.style.width, height: mapEl.style.height,
+                right: mapEl.style.right, bottom: mapEl.style.bottom, transform: mapEl.style.transform,
+                background: mapEl.style.background
+            };
+            const savedCadStyle = {
+                position: cadFrame.style.position, top: cadFrame.style.top, left: cadFrame.style.left,
+                width: cadFrame.style.width, height: cadFrame.style.height,
+                right: cadFrame.style.right, bottom: cadFrame.style.bottom,
+                margin: cadFrame.style.margin, transform: cadFrame.style.transform,
+                display: cadFrame.style.display
+            };
+            const savedCadTitleStyle = {
+                position: cadTitleBlock.style.position, top: cadTitleBlock.style.top,
+                left: cadTitleBlock.style.left, right: cadTitleBlock.style.right,
+                bottom: cadTitleBlock.style.bottom, display: cadTitleBlock.style.display
+            };
+
+            // 切换到打印布局
+            mapEl.style.position = '';
+            mapEl.style.top = '';
+            mapEl.style.left = '';
+            mapEl.style.width = '';
+            mapEl.style.height = '';
+            mapEl.style.right = '';
+            mapEl.style.bottom = '';
+            mapEl.style.transform = '';
+
+            cadFrame.style.position = '';
+            cadFrame.style.top = '';
+            cadFrame.style.left = '';
+            cadFrame.style.width = '';
+            cadFrame.style.height = '';
+            cadFrame.style.right = '';
+            cadFrame.style.bottom = '';
+            cadFrame.style.margin = '';
+            cadFrame.style.transform = '';
+            cadFrame.style.display = 'block';
+
+            cadTitleBlock.style.position = '';
+            cadTitleBlock.style.top = '';
+            cadTitleBlock.style.left = '';
+            cadTitleBlock.style.right = '';
+            cadTitleBlock.style.bottom = '';
+            cadTitleBlock.style.display = 'block';
+
+            updateCadDate();
+
+            const printMaxZoom = isWhiteBg ? WHITE_BG_MAX_ZOOM : MAX_ZOOM;
+
+            if (isWhiteBg) {
+                mapEl.style.background = '#ffffff';
+                map.setMaxZoom(WHITE_BG_MAX_ZOOM);
+            } else {
+                mapEl.style.background = '';
+                map.setMaxZoom(MAX_ZOOM);
+            }
+
+            // 【改进】用 Promise 封装 fitBounds 完成等待，替代固定延时
+            function waitForMapSettled(timeoutMs) {
+                return new Promise(function(resolve) {
+                    let done = false;
+                    function finish() {
+                        if (done) return;
+                        done = true;
+                        map.off('moveend', finish);
+                        clearTimeout(timer);
+                        resolve();
+                    }
+                    const timer = setTimeout(finish, timeoutMs || 800);
+                    map.once('moveend', finish);
+                });
+            }
+
+            function fitPrintBounds() {
+                return new Promise(function(resolve) {
+                    if (allPts.length > 0) {
+                        map.fitBounds(L.latLngBounds(allPts), {
+                            paddingTopLeft: [60, 60],
+                            paddingBottomRight: [60, 60],
+                            animate: false,
+                            maxZoom: printMaxZoom
+                        });
+                        waitForMapSettled(600).then(resolve);
+                    } else {
+                        resolve();
+                    }
+                });
+            }
+
+            let afterPrintCalled = false;
+            function afterPrint() {
+                if (afterPrintCalled) return;
+                afterPrintCalled = true;
+
+                wrapper.style.height = savedWrapperHeight;
+
+                mapEl.style.position = savedMapStyle.position;
+                mapEl.style.top = savedMapStyle.top;
+                mapEl.style.left = savedMapStyle.left;
+                mapEl.style.width = savedMapStyle.width;
+                mapEl.style.height = savedMapStyle.height;
+                mapEl.style.right = savedMapStyle.right;
+                mapEl.style.bottom = savedMapStyle.bottom;
+                mapEl.style.transform = savedMapStyle.transform;
+                mapEl.style.background = savedMapStyle.background;
+
+                cadFrame.style.position = savedCadStyle.position;
+                cadFrame.style.top = savedCadStyle.top;
+                cadFrame.style.left = savedCadStyle.left;
+                cadFrame.style.width = savedCadStyle.width;
+                cadFrame.style.height = savedCadStyle.height;
+                cadFrame.style.right = savedCadStyle.right;
+                cadFrame.style.bottom = savedCadStyle.bottom;
+                cadFrame.style.margin = savedCadStyle.margin;
+                cadFrame.style.transform = savedCadStyle.transform;
+                cadFrame.style.display = savedCadStyle.display;
+
+                cadTitleBlock.style.position = savedCadTitleStyle.position;
+                cadTitleBlock.style.top = savedCadTitleStyle.top;
+                cadTitleBlock.style.left = savedCadTitleStyle.left;
+                cadTitleBlock.style.right = savedCadTitleStyle.right;
+                cadTitleBlock.style.bottom = savedCadTitleStyle.bottom;
+                cadTitleBlock.style.display = savedCadTitleStyle.display;
+
+                setTimeout(function() {
+                    map.invalidateSize({ animate: false, pan: false });
+
+                    if (isWhiteBg) {
+                        map.setMaxZoom(WHITE_BG_MAX_ZOOM);
+                        mapEl.style.position = 'absolute';
+                        mapEl.style.top = '0';
+                        mapEl.style.left = '0';
+                        mapEl.style.width = '100%';
+                        mapEl.style.height = '100%';
+                        mapEl.style.right = 'auto';
+                        mapEl.style.bottom = 'auto';
+                        mapEl.style.transform = 'none';
+                        map.invalidateSize({ animate: false, pan: false });
+                        requestAnimationFrame(function() {
+                            fitRoutesToFrame();
+                        });
+                    } else if (allPts.length > 0) {
+                        map.setMaxZoom(MAX_ZOOM);
+                        mapEl.style.position = 'absolute';
+                        mapEl.style.top = '0';
+                        mapEl.style.left = '0';
+                        mapEl.style.width = '100%';
+                        mapEl.style.height = '100%';
+                        mapEl.style.right = 'auto';
+                        mapEl.style.bottom = 'auto';
+                        mapEl.style.transform = 'none';
+                        map.invalidateSize({ animate: false, pan: false });
+                        map.fitBounds(L.latLngBounds(allPts), {
+                            paddingTopLeft: [40, 40],
+                            paddingBottomRight: [40, 40],
+                            animate: false,
+                            maxZoom: MAX_ZOOM
+                        });
+                    }
+
+                    if (wasFullscreen && !document.fullscreenElement) {
+                        const restoreFullscreen = function() {
+                            const el = document.documentElement;
+                            const request = el.requestFullscreen || el.webkitRequestFullscreen;
+                            if (request) {
+                                try {
+                                    const p = request.call(el);
+                                    if (p && p.catch) {
+                                        p.catch(function(err) {
+                                            console.warn('恢复全屏失败：' + err.message);
+                                        });
+                                    }
+                                } catch (e) {
+                                    console.warn('恢复全屏异常：' + e.message);
+                                }
+                            }
+                            document.removeEventListener('pointerdown', restoreFullscreen, true);
+                            document.removeEventListener('click', restoreFullscreen, true);
+                            document.removeEventListener('keydown', restoreFullscreen, true);
+                        };
+                        document.addEventListener('pointerdown', restoreFullscreen, true);
+                        document.addEventListener('click', restoreFullscreen, true);
+                        document.addEventListener('keydown', restoreFullscreen, true);
+                    }
+
+                    isPrinting = false;
+                }, 350);
+            }
+
+            // 【改进】用 Promise 串行化时序：invalidateSize -> fitBounds -> 二次适配 -> print
+            map.invalidateSize({ animate: false, pan: false });
+            fitPrintBounds()
+                .then(function() {
+                    // 二次微调，确保尺寸变化后边界准确
+                    map.invalidateSize({ animate: false, pan: false });
+                    return fitPrintBounds();
+                })
+                .then(function() {
+                    // 再等一帧，让 Canvas 完成重绘
+                    return new Promise(function(resolve) {
+                        requestAnimationFrame(function() {
+                            requestAnimationFrame(resolve);
+                        });
+                    });
+                })
+                .then(function() {
+                    window.print();
+                    window.addEventListener('afterprint', afterPrint, { once: true });
+                    // 兜底：若 afterprint 未触发（部分浏览器），2 秒后恢复
+                    setTimeout(afterPrint, 2000);
+                })
+                .catch(function(err) {
+                    console.error('打印流程异常:', err);
+                    // 出错也要恢复状态
+                    afterPrint();
+                });
+        }
+
+        // ==================== 启动 ====================
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('DOMContentLoaded, 开始初始化...');
+                try {
+                    bindUIEvents();
+                    initMap();
+                } catch (e) {
+                    console.error('启动失败:', e);
+                    const el = document.getElementById('bootError');
+                    const msgEl = document.getElementById('bootErrorMsg');
+                    if (el && msgEl) {
+                        msgEl.textContent = '启动失败：' + e.message + '\n' + (e.stack || '');
+                        el.classList.add('show');
+                    }
+                }
+            });
+        } else {
+            console.log('DOM 已就绪，开始初始化...');
+            try {
+                bindUIEvents();
+                initMap();
+            } catch (e) {
+                console.error('启动失败:', e);
+                const el = document.getElementById('bootError');
+                const msgEl = document.getElementById('bootErrorMsg');
+                if (el && msgEl) {
+                    msgEl.textContent = '启动失败：' + e.message + '\n' + (e.stack || '');
+                    el.classList.add('show');
+                }
+            }
+        }
+    </script>
+</body>
 </html>
